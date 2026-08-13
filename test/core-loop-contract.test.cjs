@@ -124,10 +124,21 @@ test('e2e: execute-plan + verify-phase ship as staged workflows, not as .bob/com
 // ---- CORE-02 structural contract ------------------------------------------
 
 test('CORE-02: a produced PLAN.md carries the documented section + frontmatter markers', () => {
-  // A real produced PLAN.md from this phase is the representative artifact —
-  // it is the canonical output of the plan-phase command. Structural only.
+  // A real produced PLAN.md from the core-loop-port phase is the representative
+  // artifact — it is the canonical output of the plan-phase command. Structural
+  // only. It lives under the v1.0 milestone archive: the v2.0 transition deleted
+  // the live `.planning/phases/0*` directories instead of archiving them, and
+  // they were restored to `milestones/v1.0-phases/` rather than back into the
+  // live phase tree, which now holds only the current milestone's phases.
   const planMd = fs.readFileSync(
-    path.join(repoRoot, '.planning', 'phases', '04-core-loop-port', '04-01-PLAN.md'),
+    path.join(
+      repoRoot,
+      '.planning',
+      'milestones',
+      'v1.0-phases',
+      '04-core-loop-port',
+      '04-01-PLAN.md',
+    ),
     'utf8',
   );
   // Frontmatter fence at the top.

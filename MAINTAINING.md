@@ -55,8 +55,9 @@ date -u +%Y-%m-%d                   # the date, for the notes log
 npm test 2>&1 | tail -n 5           # record: "tests N / pass P / fail F"
 ```
 
-Write the baseline down (e.g. `189 tests / 186 pass / 3 fail`). **Caveat (a):** those
-pre-existing failures are environmental noise, not regressions — see [Caveats](#caveats-read-these-they-are-real).
+Write the baseline down (e.g. `334 tests / 334 pass / 0 fail`, which is where Phase 12 left it).
+**Caveat (a):** if the baseline is *not* zero, treat the failures as a bug to investigate before
+you vendor, not as noise to subtract forever — see [Caveats](#caveats-read-these-they-are-real).
 
 ## Step 2 — Pack the target tarball (immutable) and confirm its layout
 
@@ -169,7 +170,7 @@ Then run the full suite and **subtract the step-1 baseline**. Classify every *no
 failure:
 
 ```bash
-npm test 2>&1 | tail -n 5        # compare against the step-1 baseline (e.g. 186 pass / 3 fail)
+npm test 2>&1 | tail -n 5        # compare against the step-1 baseline (e.g. 334 pass / 0 fail)
 ```
 
 - **Expected drift** → regenerate that one fixture and record a **one-line justification keyed
@@ -210,11 +211,16 @@ grep -rn '<old>' README.md UPSTREAM.md src/installer/stage.cjs   # → empty (sw
 These are the four environment gotchas from the real `1.5.0 → 1.6.1` run
 (`07-REVENDOR-NOTES.md` L273–281, L296). Frame them as **expected**, never as failures.
 
-**(a) The pre-existing baseline `npm test` failures are environmental noise — subtract, never
-"fix" them.** In the real run there were **3** (`acceptance-coverage.test.cjs:114`, `:128`;
-`core-loop-contract.test.cjs:126`). They read archived `.planning/` fixtures that are absent
-from the working tree — they belong to archived phases, not to the payload. Record the count
-in step 1, subtract it in step 8. Only a **new** failing test ID is a real re-vendor delta.
+**(a) Subtract whatever baseline failures you record — but do not assume there are any.**
+The `1.5.0 → 1.6.1` run had **3** (`acceptance-coverage.test.cjs:114`, `:128`;
+`core-loop-contract.test.cjs:126`), and this caveat used to call them permanent environmental
+noise and tell you never to fix them. That was wrong. They were reading `.planning/` sources
+that had *moved* — the v1 phase directories were deleted rather than archived at the v2.0
+transition, and v3.0 relocated the v1/v2.0 requirement text into `milestones/`. Both were
+repaired in Phase 12 by pointing the derivations at the archive, and **the suite is now fully
+green (334/334)**. So: still record the step-1 baseline and still subtract it in step 8 — but a
+non-zero baseline is a bug to investigate, not a fact of life. Only a **new** failing test ID is
+a real re-vendor delta.
 
 **(b) The stock `gsd-core/bin/lib/legacy-cleanup.cjs:225` `1.5.0` comment is a permanent
 expected exception.** It is an immutable upstream historical comment (a Codex-migration

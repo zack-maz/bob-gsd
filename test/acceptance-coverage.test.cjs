@@ -54,7 +54,19 @@ const ID_RE = /\b(SPIKE|RUNTIME|TRANS|INSTALL|CORE|QUAL|UP)-\d+\b/g;
 // being invisible to the closed ID_RE. WR-01 / WR-03.
 const GENERIC_ID_RE = /\b[A-Z]{2,}-\d+\b/g;
 
+// Requirement text is SPLIT ACROSS MILESTONES: when a milestone closes, its
+// requirements move out of the live REQUIREMENTS.md into a milestone archive
+// (v3.0 archived v1 + v2.0 into milestones/v2.0-REQUIREMENTS.md). The checklist
+// still confirms those shipped requirements, so the derivation has to follow the
+// archive — reading only the live file would make every v1/v2 `Confirms:` token
+// look like a phantom reference.
 const REQUIREMENTS = path.join(repoRoot, '.planning', 'REQUIREMENTS.md');
+const ARCHIVED_REQUIREMENTS = path.join(
+  repoRoot,
+  '.planning',
+  'milestones',
+  'v2.0-REQUIREMENTS.md',
+);
 const CHECKLIST = path.join(repoRoot, '.planning', 'ACCEPTANCE-CHECKLIST.md');
 const FOLLOWUPS = path.join(repoRoot, '.planning', 'ACCEPTANCE-FOLLOWUPS.md');
 
@@ -68,11 +80,13 @@ const FOLLOWUPS = path.join(repoRoot, '.planning', 'ACCEPTANCE-FOLLOWUPS.md');
  * section) would be scanned as "v1", masking real orphan-SC drift.
  */
 function canonicalSCs() {
-  const md = fs.readFileSync(REQUIREMENTS, 'utf8');
+  // v1's requirements live in the milestone archive as of v3.0, so the v1/v2
+  // boundary is read there rather than in the live file.
+  const md = fs.readFileSync(ARCHIVED_REQUIREMENTS, 'utf8');
   const v2Idx = md.indexOf('## Milestone v2.0 Requirements');
   assert.ok(
     v2Idx >= 0,
-    'REQUIREMENTS.md must contain the "## Milestone v2.0 Requirements" boundary — the v1/v2 split is load-bearing for canonical SC derivation',
+    'milestones/v2.0-REQUIREMENTS.md must contain the "## Milestone v2.0 Requirements" boundary — the v1/v2 split is load-bearing for canonical SC derivation',
   );
   const v1Section = md.slice(0, v2Idx);
   return new Set([...v1Section.matchAll(ID_RE)].map((m) => m[0]));
@@ -92,14 +106,22 @@ function canonicalSCs() {
  * deferred Future section).
  */
 function declaredRequirementIds() {
-  const md = fs.readFileSync(REQUIREMENTS, 'utf8');
-  const futureIdx = md.indexOf('## Future Requirements');
-  assert.ok(
-    futureIdx >= 0,
-    'REQUIREMENTS.md must contain the "## Future Requirements" boundary — needed to bound the declared (v1 + v2.0) requirement-id set',
-  );
-  const declaredSection = md.slice(0, futureIdx);
-  return new Set([...declaredSection.matchAll(GENERIC_ID_RE)].map((m) => m[0]));
+  const declared = new Set();
+  // Every milestone's requirement doc contributes, archived or live: the archive
+  // declares v1 + v2.0, the live file declares the current milestone. Each is
+  // bounded by its OWN `## Future Requirements` heading so the deferred backlog
+  // never widens the validity set.
+  for (const docPath of [ARCHIVED_REQUIREMENTS, REQUIREMENTS]) {
+    const md = fs.readFileSync(docPath, 'utf8');
+    const futureIdx = md.indexOf('## Future Requirements');
+    assert.ok(
+      futureIdx >= 0,
+      `${path.basename(docPath)} must contain the "## Future Requirements" boundary — needed to bound the declared requirement-id set`,
+    );
+    const declaredSection = md.slice(0, futureIdx);
+    for (const m of declaredSection.matchAll(GENERIC_ID_RE)) declared.add(m[0]);
+  }
+  return declared;
 }
 
 /**
