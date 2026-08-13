@@ -34,7 +34,10 @@ test('uninstall un-merges slices, deletes tracked files, preserves .planning/', 
   fs.mkdirSync(target, { recursive: true });
 
   // Pre-seed a user mode AND a user-authored config.json key, then install.
-  fs.copyFileSync(USER_SEEDED, path.join(target, 'custom_modes.yaml'));
+  // BOB2-04: a GLOBAL-scope install merges into <home>/settings/custom_modes.yaml.
+  const seededModes = path.join(target, 'settings', 'custom_modes.yaml');
+  fs.mkdirSync(path.dirname(seededModes), { recursive: true });
+  fs.copyFileSync(USER_SEEDED, seededModes);
   const planningDir = path.join(cwd, '.planning');
   fs.mkdirSync(planningDir, { recursive: true });
   const cfgPath = path.join(planningDir, 'config.json');
@@ -54,7 +57,7 @@ test('uninstall un-merges slices, deletes tracked files, preserves .planning/', 
   assert.equal(fs.existsSync(payload), false, 'tracked payload file deleted on uninstall');
 
   // custom_modes.yaml un-merged, NOT deleted: my-mode kept, no gsd slug.
-  const modesPath = path.join(target, 'custom_modes.yaml');
+  const modesPath = seededModes;
   assert.ok(fs.existsSync(modesPath), 'custom_modes.yaml still exists (un-merged, not deleted)');
   const modes = fs.readFileSync(modesPath, 'utf8');
   assert.ok(modes.includes('slug: my-mode'), 'user my-mode preserved');

@@ -2877,16 +2877,14 @@ const runtimes = {
     "id": "bob",
     "role": "runtime",
     "title": "IBM Bob",
-    "description": "IBM Bob (bob.ibm.com) — backend-agnostic; .bob/skills + .bob/commands; text_mode prompts; sequential-inline subagents.",
+    "description": "IBM Bob (bob.ibm.com) — backend-agnostic; .bob/skills + .bob/commands; text_mode prompts; isolated subagents with parallel fan-out.",
     "tier": "core",
     "requires": [],
     "runtime": {
       "configHome": {
         "kind": "dot-home",
         "name": ".bob",
-        "env": [
-          "BOB_CONFIG_DIR"
-        ]
+        "env": []
       },
       "configFormat": "none",
       "artifactLayout": {

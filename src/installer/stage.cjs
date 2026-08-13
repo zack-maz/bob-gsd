@@ -25,8 +25,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  BOB_CAPABILITY_DECL,
   emitGsdMode,
   mergeCustomModes,
+  modesRelPathForScope,
   gateArtifact,
   buildSupportRoster,
   neutralizeModelReferences,
@@ -34,27 +36,23 @@ const {
 const { sha256, safeJoin, classifyOnUpdate, classifyOrphan } = require('./manifest.cjs');
 
 /**
- * Bob's conservative lower-bound capability declaration (CAPABILITY-MAP §1): Bob
- * HAS isolated subagents (spawn_subagent, isolated context window, `subagent` tool
- * group) — the primitive that stays unsupported is parallel subagent fan-out
- * (concurrent spawning, unverified), plus no structured prompts (text_mode only).
- * Owned by the installer (the descriptor does not enforce it) — see
- * config-merge.cjs for the text_mode write itself.
- */
-const BOB_CAPABILITY_DECL = { parallelSubagentFanout: false, structuredPrompts: false };
-
-/**
  * Representative candidate set for the support roster. Mirrors
  * scripts/generate-support-roster.cjs — the roster is GENERATED from the gate,
  * never hand-maintained (T-02-10). Full-roster generation across the whole GSD
  * skill set rides with Phases 4-5; the convertible loop below scales to it with
  * zero changes here.
+ *
+ * BOB2-05: the synthetic `gsd-parallel-fanout` exemplar was removed. It existed
+ * only to keep the gate's skip path visible while fan-out was assumed missing;
+ * now that Bob supports fan-out it would gate SUPPORTED and appear in the roster
+ * as an emitted skill that no source file produces. The gate's flag/skip path is
+ * covered where it belongs — test/unsupported-gate.test.cjs and
+ * test/bob2-capability.test.cjs — not by a fake roster row.
  */
 const ROSTER_CANDIDATES = [
   { name: 'gsd-help', requires: [] },
   { name: 'gsd-plan-phase', requires: [] },
   { name: 'gsd-execute-phase', requires: [] },
-  { name: 'gsd-parallel-fanout', requires: ['parallelSubagentFanout'] },
 ];
 
 /** Recursively list every FILE under `dir` as a path relative to `dir`. */
@@ -190,9 +188,10 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
   };
 
   // ---- Structural piece 1: gsd mode merge → custom_modes.yaml -------------
-  // On-disk path is <target>/custom_modes.yaml (CAPABILITY-MAP §2 — at the home
-  // root, NOT under settings/).
-  const modesRel = 'custom_modes.yaml';
+  // BOB2-04: the path is SCOPE-DEPENDENT on Bob 2.0 — global lives under
+  // settings/, local does not. modesRelPathForScope() owns that asymmetry and
+  // carries the evidence; do not inline a literal here again.
+  const modesRel = modesRelPathForScope(scope);
   const modesAbs = path.join(target, modesRel);
   let existingModes = '';
   try {
@@ -203,8 +202,14 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
   const mergedModes = mergeCustomModes(existingModes, emitGsdMode());
   const mergedBytes = Buffer.from(mergedModes);
   emittedThisRun.add(modesRel);
+  // Track the containing dir so an installer-created `settings/` is swept on
+  // uninstall (the sweep only removes dirs it finds EMPTY, so a real Bob home —
+  // where settings/ also holds settings.json — is never touched).
+  recordDirsFor(modesRel);
   if (!dryRun) {
-    fs.mkdirSync(target, { recursive: true });
+    // mkdir the modes file's OWN parent, not `target`: at global scope the path
+    // is one level deeper (settings/), and `target` alone leaves it missing.
+    fs.mkdirSync(path.dirname(modesAbs), { recursive: true });
     fs.writeFileSync(modesAbs, mergedBytes);
   }
   const mergedEntry = manifest.entries.find((e) => e.path === modesRel && e.kind === 'merged');

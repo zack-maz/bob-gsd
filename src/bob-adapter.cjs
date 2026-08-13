@@ -21,6 +21,7 @@
  *   - scanModelLiterals(content)              detector shared with the NEUTRAL-03 invariant
  */
 
+const path = require('node:path');
 const yaml = require('js-yaml');
 
 /** The exact marker recorded for every primitive Bob cannot support (D-10). */
@@ -147,15 +148,104 @@ function scanModelLiterals(content) {
 }
 
 /**
+ * Bob's custom-mode tool-group vocabulary, VERIFIED against the shipped Bob
+ * Shell 2.0.1 bundle rather than the (self-contradicting) docs — BOB2-02.
+ *
+ * Evidence, all read from `bobshell@2.0.1/dist/bob.js`:
+ *   - The built-in mode table declares the consolidated `agent` mode as
+ *     `groups: ["read","edit","execute","mcp","skill","todo","subagent","mode"]`
+ *     and `plan` as `["read","edit","mcp","skill","subagent","mode"]`.
+ *   - The extended table additionally carries `artifact` and `subtask`.
+ *   - `workflow` exists as a tool id but ships `hidden:!0`.
+ *   - `browser` appears ONLY in approval `allowed_permissions` seeding, never in
+ *     a built-in mode's `groups` — it is a permission token, not a mode group.
+ *
+ * CRITICAL: the mode schema validates `groups` as `z.union([z.string(),
+ * z.tuple([z.string(), {fileRegex}])])` — an OPEN string, not an enum. An
+ * unrecognised group name therefore passes validation silently and is simply
+ * never matched to a tool, costing the mode that capability with no error. That
+ * is exactly why an invalid token is dangerous and why we pin the emitted set.
+ * @type {readonly string[]}
+ */
+const BOB_TOOL_GROUPS = Object.freeze([
+  'read',
+  'edit',
+  'execute',
+  'mcp',
+  'skill',
+  'todo',
+  'artifact',
+  'subtask',
+  'subagent',
+  'mode',
+]);
+
+/**
+ * Legacy tool-group spellings Bob 2.0.1 still accepts, mapped to the canonical
+ * token it normalizes them to. Bob applies this in BOTH the custom-mode file
+ * loader and the mode importer, for the bare-string and `[name, {fileRegex}]`
+ * tuple forms alike. Recorded so the `command` vs `execute` question stays
+ * settled: `command` is a back-compat ALIAS, not an invalid token.
+ * @type {Readonly<Record<string,string>>}
+ */
+const BOB_LEGACY_TOOL_GROUP_ALIASES = Object.freeze({ command: 'execute' });
+
+/** Bob's custom-modes filename, identical at both scopes. */
+const MODES_FILENAME = 'custom_modes.yaml';
+
+/**
+ * Resolve the custom-modes file path RELATIVE TO THE INSTALL TARGET for a scope
+ * — BOB2-04. The two scopes are NOT symmetric in Bob 2.0, which is easy to get
+ * wrong and silent when you do:
+ *
+ *   global  `~/.bob/settings/custom_modes.yaml`
+ *           Bob resolves this as `join(getGlobalSettingsDirectory(), FILENAME)`,
+ *           and `getGlobalSettingsDirectory()` is `join(homedir(), '.bob',
+ *           'settings')` — the same directory that holds `settings.json`,
+ *           `auth-secrets.json` and `mcp.json`.
+ *   local   `<workspace>/.bob/custom_modes.yaml`
+ *           Bob resolves this as `join(workspaceRoot, '.bob', FILENAME)` — the
+ *           workspace path has NO `settings/` segment.
+ *
+ * Writing the global mode to the home ROOT (`~/.bob/custom_modes.yaml`) — which
+ * is what gsd-bob did through v0.2.2 — produces a file Bob 2.0 never reads, so
+ * the GSD mode simply does not appear, with no error anywhere.
+ *
+ * @param {'local'|'global'} scope
+ * @returns {string} path relative to the resolved install target
+ */
+function modesRelPathForScope(scope) {
+  return scope === 'global' ? path.join('settings', MODES_FILENAME) : MODES_FILENAME;
+}
+
+/**
+ * True when a manifest-recorded relative path denotes a custom-modes file, at
+ * EITHER scope and including manifests written by pre-BOB2-04 versions that
+ * recorded the home-root path. Uninstall keys off this, so it must stay
+ * tolerant of the old location or a v0.2.x install would leave its mode behind.
+ *
+ * @param {string} relPath
+ * @returns {boolean}
+ */
+function isModesRelPath(relPath) {
+  return typeof relPath === 'string' && path.basename(relPath) === MODES_FILENAME;
+}
+
+/**
  * The single gsd custom mode (D-01). Groups are locked to
- * `[read, edit, execute, mcp]` (D-02) — `skill`/`browser` are omitted for v1
- * because the GSD seam is execute -> gsd_run, not skill -> skill. `execute` is
- * Bob's terminal-shell tool-group token (Bob has NO `command` group); without
- * it the customInstructions gsd_run shell-out seam is dead.
- * Prose (roleDefinition/whenToUse/customInstructions) is Claude's discretion
- * (D-03): minimal, pointing users at the /gsd-* slash commands and noting that
- * planning artifacts live in .planning/ and that the mode shells out via the
- * execute tool.
+ * `[read, edit, execute, mcp]` (D-02) — `skill` is omitted for v1 because the GSD
+ * seam is execute -> gsd_run, not skill -> skill. `execute` is Bob's canonical
+ * terminal-shell tool-group token; without an execution group the
+ * customInstructions gsd_run shell-out seam is dead.
+ *
+ * BOB2-02 (verified against Bob Shell 2.0.1, see BOB_TOOL_GROUPS): the docs
+ * contradiction is a naming one, not a behavioural one — Bob's mode loader
+ * NORMALIZES the legacy `command` token to `execute`, so both spellings resolve
+ * to the same group. `execute` is the canonical form and is what we emit.
+ *
+ * Prose (roleDefinition/whenToUse/customInstructions) is minimal by design
+ * (D-03): it points users at the /gsd-* slash commands and notes that planning
+ * artifacts live in .planning/ and that the mode shells out via the execute tool.
  *
  * @returns {{slug:string,name:string,roleDefinition:string,whenToUse:string,customInstructions:string,groups:string[]}}
  */
@@ -307,13 +397,36 @@ const BOB_SKIP_LIST = {
 };
 
 /**
- * Human-readable reasons for each conservative-lower-bound primitive Bob lacks.
+ * Bob's capability declaration — THE single authority (BOB2-05). Every consumer
+ * (the installer's staging engine and all three doc generators) imports this one
+ * object, so "what Bob supports" can never mean two different things in two
+ * files. It previously existed as four hand-copied literals whose comments each
+ * claimed to be the same declaration; they were one edit away from disagreeing.
+ *
+ * `parallelSubagentFanout: true` is OBSERVED on Bob Shell 2.0.1, not assumed:
+ * the shipped `spawn_subagent` tool description states "Multiple spawn_subagent
+ * calls in one turn run in parallel." Nested spawning is separately forbidden
+ * (SUBAGENT_FORBIDDEN_TOOLS / SUBAGENT_FORBIDDEN_GROUPS) and no GSD primitive
+ * needs it.
+ *
+ * `structuredPrompts: false` keeps its conservative value — text_mode remains
+ * the prompting contract and was NOT re-verified in Phase 12.
+ * @type {Readonly<Record<string,boolean>>}
+ */
+const BOB_CAPABILITY_DECL = Object.freeze({
+  parallelSubagentFanout: true,
+  structuredPrompts: false,
+});
+
+/**
+ * Human-readable reasons for each primitive a runtime may lack. Retained in full
+ * even for primitives Bob now supports: `gateArtifact` is runtime-agnostic and
+ * still needs a concrete reason whenever a declaration reports a primitive false.
  * @type {Record<string,string>}
  */
 const PRIMITIVE_REASONS = {
   parallelSubagentFanout:
-    'requires parallel subagent fan-out; Bob documents isolated subagents but not ' +
-    'parallel spawning — unverified',
+    'requires parallel subagent fan-out; unavailable on this Bob version',
   structuredPrompts:
     'requires structured prompts; Bob supports text_mode prompting only',
 };
@@ -379,6 +492,12 @@ function buildSupportRoster(candidates, capabilityDecl) {
 module.exports = {
   UNSUPPORTED_MARKER,
   BOB_SKIP_LIST,
+  BOB_CAPABILITY_DECL,
+  BOB_TOOL_GROUPS,
+  BOB_LEGACY_TOOL_GROUP_ALIASES,
+  MODES_FILENAME,
+  modesRelPathForScope,
+  isModesRelPath,
   emitGsdMode,
   mergeCustomModes,
   unmergeCustomModes,

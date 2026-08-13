@@ -50,10 +50,16 @@ test('clean install: prints absolute target, stages full layout, writes manifest
     'vendored payload must be sourced from the package root, not cwd',
   );
 
-  // INSTALL-03 clean layout.
-  const modes = fs.readFileSync(path.join(target, 'custom_modes.yaml'), 'utf8');
+  // INSTALL-03 clean layout. BOB2-04: at GLOBAL scope the modes file Bob 2.0
+  // reads is <home>/settings/custom_modes.yaml, not the home root.
+  const modes = fs.readFileSync(path.join(target, 'settings', 'custom_modes.yaml'), 'utf8');
   const gsdCount = (modes.match(/slug: gsd$/gm) || []).length;
   assert.equal(gsdCount, 1, 'exactly one slug: gsd');
+  assert.equal(
+    fs.existsSync(path.join(target, 'custom_modes.yaml')),
+    false,
+    'must NOT write the home-root modes file Bob 2.0 ignores (BOB2-04 regression guard)',
+  );
   assert.ok(fs.existsSync(path.join(target, 'SUPPORT-ROSTER.md')), 'roster written');
 
   const manifestRaw = fs.readFileSync(path.join(target, '.gsd-bob-manifest.json'), 'utf8');

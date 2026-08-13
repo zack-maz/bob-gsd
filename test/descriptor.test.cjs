@@ -21,7 +21,7 @@ const { resolveConfigHomeFromDescriptor } = requireVendor('runtime-homes.cjs');
 const { runtimes } = requireVendor('capability-registry.cjs');
 const { resolveInstallPlan } = requireVendor('runtime-config-adapter-registry.cjs');
 
-const bobDescriptor = { kind: 'dot-home', name: '.bob', env: ['BOB_CONFIG_DIR'] };
+const bobDescriptor = { kind: 'dot-home', name: '.bob', env: [] };
 
 test('RUNTIME-01: bob descriptor resolves to ~/.bob by default (leading dot preserved)', () => {
   const resolved = resolveConfigHomeFromDescriptor(bobDescriptor, { env: {}, home: '/home/u' });
@@ -29,24 +29,31 @@ test('RUNTIME-01: bob descriptor resolves to ~/.bob by default (leading dot pres
   assert.equal(resolved, '/home/u/.bob');
 });
 
-test('RUNTIME-01: BOB_CONFIG_DIR env override wins over the default home', () => {
-  const resolved = resolveConfigHomeFromDescriptor(bobDescriptor, {
-    env: { BOB_CONFIG_DIR: '/tmp/x' },
-    home: '/home/u',
-  });
-  assert.equal(resolved, '/tmp/x');
+test('BOB2-04: bob declares NO config-home env override — ~/.bob is fixed', () => {
+  // Verified against the shipped Bob Shell 2.0.1 bundle: the ONLY BOB_* env vars
+  // it reads are BOB_API_KEY, BOB_DEV_KEY, BOB_GATEWAY_URL, BOB_LOG_LEVEL,
+  // BOB_SUPPORT_KEY, BOB_USE_MODEL_ENV and BOBSHELL_API_KEY. There is no
+  // config-home relocation variable, so the descriptor must not advertise one —
+  // an override would only ever point the installer at a directory Bob does not
+  // read. `--config-dir` remains the supported way to redirect an install.
+  // The field stays present but EMPTY: gsd-core's dot-home branch iterates
+  // `configHome.env` unconditionally, so `[]` is the data-only way to declare
+  // "no override" without patching upstream resolver code.
+  const fromRegistry = runtimes.bob.runtime.configHome;
+  assert.deepEqual(
+    fromRegistry.env,
+    [],
+    'bob configHome must declare no env override (see BOB2-04)',
+  );
 });
 
-test('RUNTIME-01: BOB_CONFIG_DIR with a leading tilde is expanded to a home-anchored path', () => {
-  // gsd-core's dot-home branch expands a leading "~/" via expandTilde, which
-  // uses os.homedir() (NOT the injected `home`). Assert tilde expansion against
-  // the real homedir — the env value's "~/" must resolve under $HOME, not stay literal.
-  const resolved = resolveConfigHomeFromDescriptor(bobDescriptor, {
-    env: { BOB_CONFIG_DIR: '~/cbob' },
+test('BOB2-04: an arbitrary BOB_* env var cannot move the resolved bob config home', () => {
+  const fromRegistry = runtimes.bob.runtime.configHome;
+  const resolved = resolveConfigHomeFromDescriptor(fromRegistry, {
+    env: { BOB_CONFIG_DIR: '/tmp/should-be-ignored' },
     home: '/home/u',
   });
-  assert.equal(resolved, path.join(os.homedir(), 'cbob'));
-  assert.ok(!resolved.startsWith('~'), 'leading tilde must be expanded, not left literal');
+  assert.equal(resolved, path.join('/home/u', '.bob'));
 });
 
 test('RUNTIME-02: the vendored registry exposes a bob runtime', () => {
@@ -57,7 +64,6 @@ test('RUNTIME-02: the vendored registry exposes a bob runtime', () => {
 test('RUNTIME-02: bob configHome.name carries the leading dot (Pitfall 1 regression guard)', () => {
   assert.equal(runtimes.bob.runtime.configHome.name, '.bob');
   assert.equal(runtimes.bob.runtime.configHome.kind, 'dot-home');
-  assert.equal(runtimes.bob.runtime.configHome.env[0], 'BOB_CONFIG_DIR');
 });
 
 test('RUNTIME-02: resolveInstallPlan("bob") does not throw (valid install axes)', () => {

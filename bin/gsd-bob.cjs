@@ -50,7 +50,7 @@ const {
   buildManifest,
   classifyOrphan,
 } = require('../src/installer/manifest.cjs');
-const { emitGsdMode, unmergeCustomModes } = require('../src/bob-adapter.cjs');
+const { emitGsdMode, unmergeCustomModes, isModesRelPath } = require('../src/bob-adapter.cjs');
 
 // Two distinct roots — derived once, kept separate for the lifetime of the run.
 const repoRoot = path.resolve(__dirname, '..'); // gsd-bob PACKAGE root (payload source)
@@ -192,8 +192,11 @@ function runUninstall({ target, dryRun }) {
     const underPlanning = rel === '.planning' || rel.startsWith(`.planning${path.sep}`);
 
     if (entry.kind === 'merged') {
-      if (rel === 'custom_modes.yaml') {
-        // Un-merge the gsd slice from the home-root custom_modes.yaml (D-06).
+      if (isModesRelPath(rel)) {
+        // Un-merge the gsd slice from custom_modes.yaml (D-06). Keyed by the
+        // adapter predicate, not a literal, so BOTH Bob 2.0 locations un-merge:
+        // `settings/custom_modes.yaml` (global) and `custom_modes.yaml` (local,
+        // and the home-root path recorded by pre-BOB2-04 manifests).
         const abs = safeJoin(target, rel); // CR-01 containment guard
         let text = '';
         try {

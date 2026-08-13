@@ -24,10 +24,10 @@ const path = require('node:path');
 /**
  * Bob's runtime context window, in tokens.
  *
- * Bob spawns isolated subagents sequentially (sparingly, with no documented
- * parallel fan-out — the `BOB_CAPABILITY_DECL` lower bound gates only
- * `parallelSubagentFanout`), so the whole GSD loop effectively shares ONE context
- * window, and Bob's real 270k is the operative token budget. gsd-core keys its
+ * Bob spawns subagents sparingly and its guidance is "default: do the work
+ * yourself", so the GSD loop shares ONE context window in the common case even
+ * though parallel fan-out IS available (BOB2-05). Bob's real 270k is therefore
+ * the operative token budget. gsd-core keys its
  * read-depth / advisory scaling on this top-level `context_window` integer
  * (defaulting to a conservative 200000 when absent), so the adapter seeds Bob's
  * true window to make gsd-core's budget math match reality.
