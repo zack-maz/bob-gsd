@@ -1,37 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: 1.6.1 Sync & Command Expansion
-current_phase: 0
-status: Awaiting next milestone
-stopped_at: Phase 11 context gathered
-last_updated: "2026-07-06T21:49:33.590Z"
-last_activity: 2026-07-06
-last_activity_desc: Milestone v2.0 completed and archived
+milestone: v3.0
+milestone_name: Bob 2.0 & gsd-core 1.10 Re-baseline
+status: in-progress
+last_updated: "2026-08-13T22:10:00.000Z"
+last_activity: 2026-08-13
 progress:
-  total_phases: 11
-  completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
-  percent: 45
-current_phase_name: on-device-acceptance-delta
+  total_phases: 6
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 17
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-02)
+See: .planning/PROJECT.md (updated 2026-08-13)
 
-**Core value:** A Bob user installs via a single command and runs the full GSD planning loop (new-project → plan-phase → execute-phase → verify) natively, producing the same `.planning/` artifacts GSD produces in Claude Code.
-**Current focus:** Phase 11 — on-device-acceptance-delta
+**Core value:** A Bob user installs via a single command and runs the full GSD planning loop (new-project → plan-phase → execute-phase → verify) natively, producing the same `.planning/` artifacts GSD produces in the reference runtime.
+**Current focus:** Phase 13 — gsd-core 1.10.0 re-sync
 
 ## Current Position
 
-Phase: Milestone v2.0 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-06 — Milestone v2.0 completed and archived
+Phase: 12 complete — Bob 2.0 Capability Re-verification
+Plan: 12-01 complete
+Status: Ready to plan Phase 13
+Last activity: 2026-08-13 — Phase 12 closed; BOB2-01..05 verified against live Bob Shell 2.0.1; P0 global custom-modes path bug found and fixed
 
 ## Performance Metrics
 
@@ -86,6 +82,7 @@ Last activity: 2026-07-06 — Milestone v2.0 completed and archived
 | Phase 10 P02 | 6m | 1 tasks | 1 files |
 | Phase 10 P03 | 5m | 1 tasks | 1 files |
 | Phase 11 P01 | 18min | 3 tasks | 5 files |
+| Phase 12 P01 | ~50m | 5 reqs | 17 files |
 
 ## Accumulated Context
 
@@ -132,6 +129,11 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 10-01]: README cluster subheads are h3 so ## Flagged gaps stays the first h2 after ## Supported skills; package.json files allowlist untouched (D-07) — COMMANDS/ARCHITECTURE/MAINTAINING stay repo-only.
 - [Phase ?]: ARCHITECTURE.md cites live src/bob-adapter.cjs + stage.cjs symbols; deleted CAPABILITY-MAP.md referenced only as git-recovered history (D-05)
 - [Phase ?]: Authored MAINTAINING.md as a replayable version-bump checklist (D-06); kept <old>/<new> placeholders; excluded from package.json files allowlist (D-07)
+- [Phase 12]: Bob's shipped 2.0.1 bundle is the authority over its own docs. Where the two conflict, the bundle wins — it is what runs. Two of Phase 12's findings contradicted the docs and one contradicted a July correction; all three were settled by reading the shipped code, not by re-reading pages.
+- [Phase 12]: The global/local custom-modes path is ASYMMETRIC (global `settings/custom_modes.yaml`, local `.bob/custom_modes.yaml`) and owned solely by `modesRelPathForScope()`. Never re-inline the literal — writing the global mode to the home root yields a file Bob silently ignores.
+- [Phase 12]: Bob validates mode `groups` as an OPEN string union, not an enum. Invalid group names load without error and grant no tool, so the emitted set must be pinned by test — a schema error will never catch it.
+- [Phase 12]: `BOB_CAPABILITY_DECL` is exported once from `src/bob-adapter.cjs` and imported by the staging engine and all three generators. It was previously four hand-copied literals whose comments each claimed to be the same declaration.
+- [Phase 12]: Roster candidates must all be real emitted artifacts — the synthetic `gsd-parallel-fanout` exemplar was removed. The gate's flag/skip path is proven by unit tests, not by a fictional roster row.
 
 ### Pending Todos
 
@@ -143,9 +145,14 @@ None yet.
 
 [Issues that affect future work]
 
-- No live Bob on the dev device: three primitives (subagent isolation, structured-choice prompts, config-home env-override + IDE-vs-Shell signal) cannot be empirically confirmed during development. Phase 1 resolves them from docs with conservative lower-bound defaults; empirical confirmation is deferred to the Phase 6 on-device acceptance pass, and any assumption proven wrong on hardware becomes a logged follow-up. v2.0 extends this same pass (Phase 11) with device-runnable steps for the new commands and the model-neutrality invariant.
-- Backend-neutrality, the flag-gap contract, and `.planning/` root-anchoring are cross-cutting constraints established in Phase 2 and enforced through every later phase — including all of v2.0.
-- v2.0 dependency risk: Phase 7's 1.6.1 re-vendor is the foundation for Phases 8–11; a mixed 1.5.0/1.6.1 payload (SYNC-01) would undermine neutralization (8), command expansion (9), the docs roster (10), and the acceptance delta (11). Keep the payload on one consistent version.
+- ~~No live Bob on the dev device~~ **RESOLVED as of v3.0** — Bob Shell **2.0.1** is installed at `/opt/homebrew/bin/bob`. Phase 12 settled subagent isolation + fan-out, the config-home override, and the IDE-vs-Shell signal; **structured-choice prompts remain the one unverified primitive** (`structuredPrompts: false` is still a conservative default, not an observation). Note the install is SSO-authenticated, so `bob run` headless probes need `BOB_API_KEY` — inference-driven checks are user-driven.
+- Backend-neutrality, the flag-gap contract, and `.planning/` root-anchoring are cross-cutting constraints established in Phase 2 and enforced through every later phase — including all of v3.0.
+- ~~**v3.0 P0 — tool-group contradiction.**~~ **RESOLVED in Phase 12.** Both doc pages describe real behaviour: `command` is a back-compat alias Bob 2.0.1 normalizes to `execute`. `260707-ey1`'s change was correct but its rationale was wrong — the seam was never dead (FU-06). The real hazard found underneath it: `groups` validates as an open string union, so a genuinely invalid group is accepted silently and grants no tool.
+- **NEW P0 found and fixed in Phase 12 — global installs emitted an invisible mode.** Bob 2.0 reads `~/.bob/settings/custom_modes.yaml`; gsd-bob wrote `~/.bob/custom_modes.yaml` (FU-05). Every global install through v0.2.2 is affected: the GSD mode never appeared and no error was raised. **The dev machine's own `~/.bob` still carries the broken v0.2.2 layout** — it needs a re-install before any live-session verification (BOB2-03's in-session leg, ACCEPT-04) can run.
+- **v3.0 constraint (2026-08-13, operator):** gsd-bob must never mention any model *or agent* other than Bob, and must not ask the user to select a model during GSD configuration. Tracked as NEUTRAL-04 → Phase 13 (the offending text is in the vendored payload, so it must be fixed after the 1.10.0 re-vendor, not before).
+- **v3.0 dependency risk:** Phase 13's 1.10.0 re-vendor is the payload foundation for Phases 14–17; a mixed 1.6.1/1.10.0 payload would undermine all of them. Keep the payload on one consistent version — the same discipline SYNC-01 imposed in v2.0.
+- **v3.0 two-upstream drift:** gsd-bob is pinned to both gsd-core and Bob's documented surface, and both moved (4 minor versions and 1 major respectively). Syncing one against a stale model of the other is exactly how the `command`/`execute` regression happened — hence Bob verification (12) precedes the re-vendor (13).
+- Several repo citations still point at `bob.ibm.com/docs/ide/...` pages for claims about Shell behavior. Bob 2.0 now publishes Shell-specific equivalents; Phase 12 should re-point them.
 
 ### Quick Tasks Completed
 
@@ -171,10 +178,20 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-04T17:29:11.456Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-on-device-acceptance-delta/11-CONTEXT.md
+Last session: 2026-08-13
+Stopped at: Milestone v3.0 defined (requirements + roadmap written, uncommitted)
+Resume file: .planning/ROADMAP.md
+
+## Session Continuity (v3.0)
+
+Last session: 2026-08-13 — Phase 12 executed end to end (verification + fixes + tests + docs).
+Resume file: `.planning/phases/12-bob-2-0-capability-re-verification/12-01-SUMMARY.md`
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- **Re-install gsd-bob into the live `~/.bob`** — it still carries the v0.2.2 layout whose global mode Bob 2.0 ignores. Until this runs, the `gsd` mode is not selectable and no in-session verification is possible: `node bin/gsd-bob.cjs --bob --global`. Expect a Bob-home approval prompt (2.0.1 blocks auto-approval for `~/.bob` writes)
+- **Cut a release** — the BOB2-04 path fix affects every existing global install, so this is a user-visible correctness fix, not a routine bump
+- `/gsd-plan-phase 13` for the gsd-core 1.10.0 re-sync (now also carrying NEUTRAL-04 and a descriptor/patch-script drift guard)
+- Resolve the provenance of the 34 `gsd-*.md` persona files already in `~/.bob/agents/` (dated 2026-06-17, not in the gsd-bob manifest) before Phase 14 emits into that directory
+- Planning docs are **uncommitted** (`commit_docs: false` in config) — commit them by hand
+- Outstanding (housekeeping, no longer blocking): v2.0's phase directories (`.planning/phases/07-…` through `11-…`) are still in the live phase tree rather than archived under `.planning/milestones/v2.0-phases/`. Nothing is lost — unlike v1's, they were never deleted
