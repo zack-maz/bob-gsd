@@ -31,10 +31,10 @@ const path = require('node:path');
 
 const adapter = require(path.join(__dirname, '..', 'src', 'bob-adapter.cjs'));
 
-// Bob's conservative lower bound — the SAME declaration generate-support-roster.cjs
-// uses, so "emitted" means exactly one thing across both generators (WR-01). Bob HAS
-// isolated subagents; the gated primitive is parallel subagent fan-out (unverified).
-const bobCapabilityDecl = { parallelSubagentFanout: false, structuredPrompts: false };
+// The SAME declaration generate-support-roster.cjs uses, so "emitted" means exactly
+// one thing across both generators (WR-01) — now enforced by importing the adapter's
+// single authority rather than re-typing the literal (BOB2-05).
+const bobCapabilityDecl = adapter.BOB_CAPABILITY_DECL;
 
 // Candidate set DERIVED from `commands/gsd/*.md` — never a hardcoded name list, so
 // the reference cannot drift from what actually emits (D-02, drift-proof spine).

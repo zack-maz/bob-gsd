@@ -24,10 +24,11 @@ const path = require('node:path');
 const repoRoot = path.join(__dirname, '..');
 const adapter = require(path.join(repoRoot, 'src', 'bob-adapter.cjs'));
 
-// Same representative capability declaration + candidate derivation as
-// scripts/generate-support-roster.cjs (D-06: derived from commands/gsd/*.md,
-// plus the curated edge case that exercises the gate's skip path).
-const bobCapabilityDecl = { parallelSubagentFanout: false, structuredPrompts: false };
+// Same capability declaration + candidate derivation as
+// scripts/generate-support-roster.cjs (D-06: derived from commands/gsd/*.md).
+// The declaration is IMPORTED, never re-declared, so stamped cover facts cannot
+// drift from the roster (BOB2-05).
+const bobCapabilityDecl = adapter.BOB_CAPABILITY_DECL;
 
 const commandsDir = path.join(repoRoot, 'commands', 'gsd');
 const derivedCandidates = fs.existsSync(commandsDir)
@@ -36,13 +37,9 @@ const derivedCandidates = fs.existsSync(commandsDir)
       .filter((f) => f.endsWith('.md'))
       .map((f) => ({ name: `gsd-${path.basename(f, '.md')}`, requires: [] }))
   : [];
-const curatedEdgeCases = [
-  { name: 'gsd-parallel-fanout', requires: ['parallelSubagentFanout'] },
-];
 const candidates = (() => {
   const byName = new Map();
   for (const c of derivedCandidates) byName.set(c.name, c);
-  for (const c of curatedEdgeCases) byName.set(c.name, c);
   return [...byName.values()];
 })();
 

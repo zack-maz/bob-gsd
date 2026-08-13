@@ -123,21 +123,22 @@ This covers the GSD **core loop** (`new-project` → `discuss-phase` → `plan-p
 
 Skills that depend on a primitive Bob does not provide are **omitted from the loadable set
 and recorded loud** in `SUPPORT-ROSTER.md` as `unsupported on Bob: <reason>` lines — never
-silently broken. Current gaps:
+silently broken.
 
-- `gsd-parallel-fanout` — *unsupported on Bob: requires parallel subagent fan-out; Bob
-  documents isolated subagents but not parallel spawning — unverified.*
+**Current gaps: none.** All 28 curated commands emit.
 
-Bob **has** isolated subagents (`spawn_subagent`, an isolated context window, and a
-`subagent` tool group), so isolation-only workflows are supported. The conservative
-unconfirmed lower bound is **parallel subagent fan-out** (multiple concurrent subagents),
-which Bob does not document — so only `gsd-parallel-fanout` is flagged. Interactive prompts
-degrade to numbered `text_mode` choices rather than a structured-choice payload. These are
-conservative, documented lower-bound defaults. Because Bob spawns isolated subagents
-sequentially (no parallel fan-out), the whole loop effectively shares **one** context window,
-so the installer seeds `context_window: 270000` (Bob's real runtime window) into
-`.planning/config.json` so gsd-core's read-depth / advisory scaling matches the real shared
-budget instead of the conservative 200k default.
+The one long-standing flag was lifted in Phase 12, after re-verification against a live
+Bob Shell 2.0.1 install. Bob has isolated subagents (`spawn_subagent`, an isolated context
+window, a `subagent` tool group) **and** parallel fan-out — its own `spawn_subagent` tool
+description states that multiple calls in one turn run in parallel. Fan-out was previously
+flagged only because Bob's 1.0.x docs were silent on it. Nested spawning (a subagent
+spawning another) is still forbidden by Bob, and no GSD workflow requires it.
+
+Interactive prompts still degrade to numbered `text_mode` choices rather than a
+structured-choice payload — that remains a conservative default, not a re-verified one.
+The installer seeds `context_window: 270000` (Bob's real runtime window) into
+`.planning/config.json` so gsd-core's read-depth / advisory scaling matches Bob's actual
+budget instead of the 200k default.
 
 ## Targeted gsd-core version
 

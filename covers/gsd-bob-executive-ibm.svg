@@ -129,7 +129,7 @@
   <path class="arw" d="M316 602 L340 602" marker-end="url(#a)"/>
   <path class="arw" d="M620 602 L644 602" marker-end="url(#a)"/>
 
-  <text x="40" y="696" class="mut" font-size="12">A capability check runs at every install — anything Bob can't yet support is withheld, never broken: <tspan class="ink" font-weight="600" data-stamp="withheld">1</tspan> command today, <tspan class="ink" font-weight="600" data-stamp="emitted">28</tspan> fully supported.</text>
+  <text x="40" y="696" class="mut" font-size="12">A capability check runs at every install — anything Bob can't yet support is withheld, never broken: <tspan class="ink" font-weight="600" data-stamp="withheld">0</tspan> command today, <tspan class="ink" font-weight="600" data-stamp="emitted">28</tspan> fully supported.</text>
 
   <line class="rule" x1="40" y1="714" x2="920" y2="714"/>
 

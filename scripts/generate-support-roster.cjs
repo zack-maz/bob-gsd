@@ -20,11 +20,10 @@ const path = require('node:path');
 
 const adapter = require(path.join(__dirname, '..', 'src', 'bob-adapter.cjs'));
 
-// Bob's conservative lower bound (CAPABILITY-MAP §1): Bob HAS isolated subagents;
-// the primitive that stays unsupported is parallel subagent fan-out (unverified),
-// plus no structured prompts (text_mode only). The full capability declaration is
-// owned by the installer in Phase 3; this is the representative Phase-2 declaration.
-const bobCapabilityDecl = { parallelSubagentFanout: false, structuredPrompts: false };
+// Bob's capability declaration, IMPORTED from its single authority in the adapter
+// (BOB2-05) — never re-declared here, so this generator and the installer cannot
+// disagree about what Bob supports.
+const bobCapabilityDecl = adapter.BOB_CAPABILITY_DECL;
 
 // Candidate set DERIVED from `commands/gsd/*.md` — the same source the installer
 // iterates (`src/installer/stage.cjs` L239-266) — so the standalone script and the
@@ -38,19 +37,15 @@ const derivedCandidates = fs.existsSync(commandsDir)
       .map((f) => ({ name: `gsd-${path.basename(f, '.md')}`, requires: [] }))
   : [];
 
-// Preserve the single curated edge-case entry that exercises the gate's skip path
-// so the roster keeps proving the mechanism:
-//   - gsd-parallel-fanout: unmet hard dependency — requires a primitive Bob lacks
-//     (parallel subagent fan-out; Bob has isolated subagents but not parallel spawning).
-const curatedEdgeCases = [
-  { name: 'gsd-parallel-fanout', requires: ['parallelSubagentFanout'] },
-];
-
-// De-duplicate by name (curated entries win if a derived source shares the name).
+// BOB2-05: the curated `gsd-parallel-fanout` edge case is gone. It was a synthetic
+// entry that existed only to keep the gate's skip path visible on the roster while
+// fan-out was assumed unavailable. Bob 2.0.1 supports fan-out, so the entry would
+// now gate SUPPORTED and be listed as an emitted skill that has no source file —
+// which would also break the roster/commands-dir equality the docs guard asserts.
+// The gate mechanism is proven by unit tests, not by a fictional roster row.
 const candidates = (() => {
   const byName = new Map();
   for (const c of derivedCandidates) byName.set(c.name, c);
-  for (const c of curatedEdgeCases) byName.set(c.name, c);
   return [...byName.values()];
 })();
 
@@ -74,8 +69,8 @@ const header = `# Bob Support Roster
 > across a gsd-bob merge.
 >
 > **Scope:** the candidate set is now DERIVED from the emitted \`commands/gsd/*.md\` source
-> set (the same source the installer iterates), plus the two curated edge cases that exercise
-> the gate's skip paths — full-roster generation (Phase 5, D-06).
+> set (the same source the installer iterates) — every candidate is a real emitted artifact,
+> with no synthetic entries (full-roster generation, Phase 5 D-06; BOB2-05).
 `;
 
 const supportedSection = supported.length

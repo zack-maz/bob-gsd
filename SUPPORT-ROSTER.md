@@ -13,8 +13,8 @@
 > across a gsd-bob merge.
 >
 > **Scope:** the candidate set is now DERIVED from the emitted `commands/gsd/*.md` source
-> set (the same source the installer iterates), plus the two curated edge cases that exercise
-> the gate's skip paths — full-roster generation (Phase 5, D-06).
+> set (the same source the installer iterates) — every candidate is a real emitted artifact,
+> with no synthetic entries (full-roster generation, Phase 5 D-06; BOB2-05).
 
 ## Supported (emitted to `.bob/commands` / `.bob/skills`)
 
@@ -49,4 +49,4 @@
 
 ## Unsupported on Bob (omitted from the loadable set, recorded loud)
 
-- gsd-parallel-fanout: unsupported on Bob: requires parallel subagent fan-out; Bob documents isolated subagents but not parallel spawning — unverified
+_(none unsupported in the candidate set)_

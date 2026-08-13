@@ -63,7 +63,9 @@ Three pieces implement this axis:
 3. **The `"bob"` runtime descriptor** — the registry entry in
    `gsd-core/bin/lib/capability-registry.cjs` (the `"bob"` block inside `const runtimes`,
    immediately before `"claude"`). It declares Bob's surface: `configHome` as a generic
-   `dot-home` `.bob` with a `BOB_CONFIG_DIR` env override, the `artifactLayout` naming the two
+   `dot-home` `.bob` with an empty `env` list — Bob 2.0.1 reads no config-home relocation
+   variable, so declaring one would only point the installer at a directory Bob ignores
+   (BOB2-04) — the `artifactLayout` naming the two
    converters above, and `commandStyle: slash-hyphen`. It is **pure data** — the generic
    `dot-home` resolver in `runtime-homes.cjs` already resolves the `.bob` home, and the
    `gsd-tools.cjs` shim resolves it with **no Bob-specific branch** (grep-confirmed zero `bob`
@@ -92,30 +94,37 @@ every exclusion **loud**.
   (it returns `{ supported: false, reason: 'invalid candidate: missing or non-string name' }`),
   and `buildSupportRoster` never interpolates a possibly-undefined name into a roster line.
 
-- **The conservative lower bound** is `BOB_CAPABILITY_DECL` in `src/installer/stage.cjs`:
+- **The capability declaration** is `BOB_CAPABILITY_DECL`, exported from
+  `src/bob-adapter.cjs` and imported by the staging engine and all three doc generators
+  (one authority, never re-declared):
 
   ```js
-  const BOB_CAPABILITY_DECL = { parallelSubagentFanout: false, structuredPrompts: false };
+  const BOB_CAPABILITY_DECL = Object.freeze({
+    parallelSubagentFanout: true,
+    structuredPrompts: false,
+  });
   ```
 
-  Two defaults, explained in prose:
-  - **No parallel subagent fan-out** → Bob **has** isolated subagents (`spawn_subagent`, an
-    isolated context window, a `subagent` tool group) but does not document spawning MULTIPLE
-    concurrent subagents; parallel fan-out is the conservative unverified lower bound, so
-    `gsd-parallel-fanout` is the sole gated artifact.
+  Two entries, explained in prose:
+  - **Parallel subagent fan-out — supported (observed).** Verified in Phase 12 against a live
+    Bob Shell 2.0.1 install: Bob's own `spawn_subagent` tool description states *"Multiple
+    spawn_subagent calls in one turn run in parallel."* alongside *"Subagents cannot spawn
+    other subagents."* Isolation was already confirmed (isolated context window, `subagent`
+    tool group). Only NESTED spawning is unavailable, and no GSD workflow needs it. This
+    value was `false` through v0.2.2 purely because Bob's 1.0.x docs were silent.
   - **No structured-choice prompts** → Bob supports **`text_mode` prompting only** (numbered
-    text choices), not a structured-choice prompt primitive.
+    text choices), not a structured-choice prompt primitive. This one is still a conservative
+    default; it was *not* re-verified in Phase 12.
 
-  The human-readable rationale for each lives in `PRIMITIVE_REASONS` in `src/bob-adapter.cjs`
-  (around L308–L313). These two defaults map to the Unsupported set in the generated
-  `SUPPORT-ROSTER.md`: `gsd-parallel-fanout` (requires parallel subagent fan-out; Bob has
-  isolated subagents but not parallel spawning — unverified) is the single gated artifact.
-  `gsd-autonomous` is **supported** — it only needs isolated subagents, which Bob provides.
+  The human-readable rationale for each lives in `PRIMITIVE_REASONS` in `src/bob-adapter.cjs`.
+  With fan-out supported, the generated `SUPPORT-ROSTER.md` has an **empty** Unsupported set:
+  all 28 curated commands emit. The gate itself is unchanged and still proves its flag/skip
+  path in `test/unsupported-gate.test.cjs` and `test/bob2-capability.test.cjs` — the former
+  synthetic `gsd-parallel-fanout` roster row was removed rather than allowed to appear as an
+  emitted skill with no source file.
 
-- **Context-window consequence of sequential subagents.** Because Bob spawns isolated
-  subagents **sequentially** (no documented parallel fan-out), the entire GSD loop effectively
-  shares **one** context window (work is not fanned out into concurrent fresh contexts), so
-  Bob's **270k** runtime window is the operative token budget for the whole loop. gsd-core keys its read-depth / advisory scaling on
+- **Context-window consequence.** GSD's loop on Bob shares **one** context window in the
+  common case, so Bob's **270k** runtime window is the operative token budget. gsd-core keys its read-depth / advisory scaling on
   a top-level `context_window` integer in `.planning/config.json` (defaulting to a conservative
   **200000** when absent). So the installer seeds `context_window: 270000` into the
   workspace-root `.planning/config.json` — via `mergeTextMode` (constant `BOB_CONTEXT_WINDOW`)
@@ -222,8 +231,18 @@ territory it must never sweep.
   (`convertClaudeCommandToBobCommand` / `convertClaudeCommandToBobSkill`).
 - **The one isolated adapter (net-new substance):** `src/bob-adapter.cjs` — the gate
   (`gateArtifact` / `buildSupportRoster`), the neutralization pass
-  (`neutralizeModelReferences` / `scanModelLiterals`), and the idempotent
-  `custom_modes.yaml` merge (`mergeCustomModes` / `unmergeCustomModes`).
+  (`neutralizeModelReferences` / `scanModelLiterals`), the idempotent
+  `custom_modes.yaml` merge (`mergeCustomModes` / `unmergeCustomModes`), and the
+  Bob 2.0 surface constants verified in Phase 12 (`BOB_CAPABILITY_DECL`,
+  `BOB_TOOL_GROUPS`, `modesRelPathForScope` / `isModesRelPath`).
+
+  **The custom-modes path is scope-asymmetric (BOB2-04)** and this is the single
+  easiest thing to get silently wrong: Bob 2.0 resolves the *global* modes file as
+  `~/.bob/settings/custom_modes.yaml` (via its `getGlobalSettingsDirectory()`), but
+  the *project* one as `<workspace>/.bob/custom_modes.yaml` — no `settings/`
+  segment. `modesRelPathForScope()` owns that asymmetry so no call site re-inlines
+  a literal. Writing the global mode to the home root (what gsd-bob did through
+  v0.2.2) produces a file Bob never reads, with no error surfaced anywhere.
 - **The staging engine that wires them:** `src/installer/stage.cjs` — node:fs/node:path only,
   it *calls* the adapter and converters, never reimplements them.
 
