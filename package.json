@@ -1,6 +1,6 @@
 {
   "name": "@zack-maz/gsd-bob",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "GSD for IBM Bob — a standalone, installable adapter that runs the open-gsd spec-driven planning framework natively inside IBM Bob.",
   "keywords": [
     "ibm-bob",
