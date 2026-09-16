@@ -46,7 +46,7 @@
 
   <rect class="pill" x="560" y="32" width="360" height="40"/>
   <text x="740" y="57" text-anchor="middle" class="mono" fill="#f4f4f4" font-size="12.5">npx @zack-maz/gsd-bob --bob --local</text>
-  <text x="920" y="92" text-anchor="end" class="mut" font-size="12">open source · MIT · <tspan data-stamp="version" font-weight="600">v0.2.3</tspan></text>
+  <text x="920" y="92" text-anchor="end" class="mut" font-size="12">open source · MIT · <tspan data-stamp="version" font-weight="600">v0.3.0</tspan></text>
 
   <line class="rule" x1="40" y1="112" x2="920" y2="112"/>
 
@@ -105,7 +105,7 @@
   <text x="58" y="558" class="lbl" font-size="12">STEP 1 · SOURCE</text>
   <text x="58" y="584" class="ink" font-size="16" font-weight="700">The GSD playbook</text>
   <line class="rule" x1="58" y1="598" x2="294" y2="598"/>
-  <text x="58" y="624" class="mut" font-size="12.5"><tspan class="blue" font-weight="700" data-stamp="emitted">28</tspan> planning commands, honed</text>
+  <text x="58" y="624" class="mut" font-size="12.5"><tspan class="blue" font-weight="700" data-stamp="emitted">31</tspan> planning commands, honed</text>
   <text x="58" y="642" class="mut" font-size="12.5">across many AI coding tools.</text>
 
   <!-- Step 2 -->
@@ -129,7 +129,7 @@
   <path class="arw" d="M316 602 L340 602" marker-end="url(#a)"/>
   <path class="arw" d="M620 602 L644 602" marker-end="url(#a)"/>
 
-  <text x="40" y="696" class="mut" font-size="12">A capability check runs at every install — anything Bob can't yet support is withheld, never broken: <tspan class="ink" font-weight="600" data-stamp="withheld">0</tspan> command today, <tspan class="ink" font-weight="600" data-stamp="emitted">28</tspan> fully supported.</text>
+  <text x="40" y="696" class="mut" font-size="12">A capability check runs at every install — anything Bob can't yet support is withheld, never broken: <tspan class="ink" font-weight="600" data-stamp="withheld">0</tspan> command today, <tspan class="ink" font-weight="600" data-stamp="emitted">31</tspan> fully supported.</text>
 
   <line class="rule" x1="40" y1="714" x2="920" y2="714"/>
 

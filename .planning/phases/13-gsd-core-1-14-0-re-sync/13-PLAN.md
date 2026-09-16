@@ -5,9 +5,10 @@ type: execute
 wave: 1
 depends_on: ["12-01"]
 autonomous: true
-requirements: [RESYNC-01, RESYNC-02, RESYNC-03, RESYNC-04, BOBVER-01, BOBVER-02, DOCS-05]
-status: planned
+requirements: [RESYNC-01, RESYNC-02, RESYNC-03, RESYNC-04, RESYNC-05, RESYNC-06, DOCS-05, UP-03]
+status: executed
 planned: 2026-09-16
+executed: 2026-09-16
 branch: update/bob-latest-gsd-core
 ---
 
@@ -65,7 +66,7 @@ branch: update/bob-latest-gsd-core
 | D-08 | New patch deltas: (7) `VALID_CONVERTER_NAMES` entries, (8) `.bob` probes in the `gsd_run` resolver preamble over the doc tree; drop the synthetic `package.json` sibling; add an all-deltas post-verify so a failed anchor can never leave a half-patched tree | Delta-report risks 2, 5, 7 |
 | D-09 | Descriptor drift guard: a test parses `REGISTRY_BLOCK` and deep-equals it to `runtimes.bob`, and runs 1.14.0's own `capability-validator` over the bob entry | Roadmap SC7; Phase 12 found the two already disagreeing |
 | D-10 | NEUTRAL-04 (no other agent/product names in the emitted set) is **deferred** to its own plan | Fuzzy prose rewriting across 31 commands with a new invariant; out of this compatibility task's scope and not required for correctness. Recorded, not silently dropped |
-| D-11 | No version bump, tag, push, or publish on this branch | Release is user-driven (repo convention: separate `chore(release)` commit) |
+| D-11 | Version bumped to 0.3.0 in a separate `chore(release)` commit; `package.json` gains `repository`/`homepage`/`bugs`/`keywords`/`publishConfig`; `THIRD-PARTY-NOTICES.md` (upstream MIT) ships in the tarball. Tag, push and `npm publish` are confirmed with the user first | Original rule was "no bump on this branch"; the user asked on 2026-09-16 for the npm package to be updated and connected to the repo, and for the open-source licensing to be completed |
 
 ## Tasks
 

@@ -10,27 +10,27 @@ A Bob user can install via a single command and run the full GSD planning loop �
 
 ## Current State
 
-**Shipped:** v2.0 — 1.6.1 Sync & Command Expansion (2026-07-06). Published to npm as `@zack-maz/gsd-bob@0.2.1`.
+**Shipped:** v2.0 — 1.6.1 Sync & Command Expansion (2026-07-06). Published to npm as `@zack-maz/gsd-bob@0.2.1`; the current released version is `0.2.3`.
 
-gsd-bob now vendors gsd-core **1.6.1** on one consistent version, emits **28** model-neutral commands (grown from 10), and is documented to a maintainer standard (expanded README, generated per-command `COMMANDS.md`, `ARCHITECTURE.md`, and a `MAINTAINING.md` version-bump runbook). The installer seeds Bob's real **270k** `context_window` into `.planning/config.json` so gsd-core's read-depth scaling matches Bob's sequential-inline shared window. The consolidated on-device acceptance checklist (AC-01..AC-45) is assembled for the single unattended pass on Bob hardware.
+**In progress (uncommitted, branch `update/bob-latest-gsd-core`):** gsd-bob now vendors gsd-core **1.14.0** on one consistent version, emits **31** model-neutral commands (grown from 10 → 28 → 31), and targets **Bob 2.0.x**. It is documented to a maintainer standard (README, generated per-command `COMMANDS.md`, `ARCHITECTURE.md`, a `MAINTAINING.md` runbook corrected from the real replay, and an `UPSTREAM.md` 9-artifact inventory). The installer seeds three adapter-owned keys into `.planning/config.json` — `workflow.text_mode`, `workflow.use_worktrees: false` (1.14.0's isolation gate is FATAL without it) and Bob's real **270k** `context_window` — and global installs now emit absolute payload references. The consolidated on-device acceptance checklist (AC-01..AC-50) is assembled for the single unattended pass on Bob 2.x hardware.
 
 **Milestones shipped:**
 - **v1.0 — Bob Runtime & Core Loop** (Phases 1–6): install one-liner + full planning loop native in Bob, upstream-ready.
 - **v2.0 — 1.6.1 Sync & Command Expansion** (Phases 7–11): 1.6.1 re-vendor, model neutralization, 10→28 command expansion, maintainer docs, acceptance delta.
 
-## Current Milestone: v3.0 Bob 2.0 & gsd-core 1.10 Re-baseline
+## Current Milestone: v3.0 Bob 2.0 & gsd-core 1.14 Re-baseline
 
-**Goal:** Re-baseline gsd-bob onto both upstreams at once — gsd-core `1.10.0` and Bob Shell `2.x` — and use the newly available live Bob install to settle the assumptions v1/v2 could only defer.
+**Goal:** Re-baseline gsd-bob onto both upstreams at once — gsd-core **`1.14.0`** and **Bob 2.0.x** (Bob Shell 2.0.0–2.0.4, Bob IDE 2.x) — and settle the assumptions v1/v2 could only defer. The milestone opened against gsd-core `1.10.0`; upstream shipped 1.11.0–1.14.0 before the re-sync ran, so Phase 13 re-baselined onto 1.14.0 (Phase 13 D-01) and narrowed the host target to Bob 2.0.x only, since 1.0.x has neither skills nor subagents (D-05, user decision 2026-09-16).
 
 **Target features:**
 - Re-verify every Bob surface assumption against a **live Bob Shell 2.x** install, resolving the `command`-vs-`execute` tool-group contradiction that gates the `gsd_run` seam
-- Re-vendor the gsd-core payload `1.6.1 → 1.10.0` (six Bob deltas re-applied, neutrality invariant re-run, MAINTAINING runbook replayed)
-- Adopt the Bob 2.0 surfaces that did not exist before: `.bob/agents/` personas (real isolated subagents instead of the inline fallback), `AGENTS.md` context, lifecycle hooks
+- Re-vendor the gsd-core payload `1.6.1 → 1.14.0` (**nine** Bob deltas re-applied with a preflight and a post-verify, the descriptor re-shaped to what 1.14.0's own validator requires, neutrality invariant re-run, MAINTAINING runbook rewritten from the real replay)
+- Adopt the Bob 2.0 surfaces that did not exist before: `AGENTS.md` context and lifecycle hooks — *`.bob/agents/` personas are blocked: the Bob page documenting them was withdrawn (404), so there is no persona contract to emit against*
 - Wire gsd-core's companion MCP server into Bob via `bob mcp add` as a second integration surface
-- Spike whether `bob` can become an **external/pluggable runtime descriptor** under 1.10.0's trust gate, retiring the vendored `capability-registry.cjs` hand-edit
+- Spike whether `bob` can become an **external/pluggable runtime descriptor** under 1.14.0's trust gate, retiring the vendored `capability-registry.cjs` hand-edit — *answered **NO-GO** in Phase 13: every runtime-resolving module reads the frozen registry directly*
 - Run the deferred on-device acceptance pass for real, and re-baseline the checklist for Bob 2.0
 
-**Key context:** Bob Shell 2.0.0 is a major release requiring a fresh install (no 1.0.x upgrade path). Most of the emission contract survives it — `.bob/skills/<name>/SKILL.md` and `.bob/commands/*.md` are unchanged — so this is a re-baseline, not a rewrite. One exception, found in Phase 12: the **global** custom-modes file moved to `~/.bob/settings/custom_modes.yaml`, so every global install through v0.2.2 wrote a mode Bob silently ignored. Verified deltas and citations: [`research/v3.0-UPSTREAM-DELTA.md`](./research/v3.0-UPSTREAM-DELTA.md).
+**Key context:** Bob Shell 2.0.0 is a major release requiring a fresh install (no 1.0.x upgrade path). Most of the emission contract survives it — `.bob/skills/<name>/SKILL.md` and `.bob/commands/*.md` are unchanged — so this is a re-baseline, not a rewrite. Two exceptions were found and fixed: the **global** custom-modes file moved to `~/.bob/settings/custom_modes.yaml` (Phase 12 — every global install through v0.2.2 wrote a mode Bob silently ignored), and global installs were emitting workspace-relative `.bob/gsd-core/...` references that do not exist under `~/.bob` (Phase 13, RESYNC-06). Verified deltas and citations: the four 2026-09-16 reports in [`research/`](./research/), which supersede [`research/v3.0-UPSTREAM-DELTA.md`](./research/v3.0-UPSTREAM-DELTA.md).
 
 ## Requirements
 
@@ -51,12 +51,13 @@ gsd-bob now vendors gsd-core **1.6.1** on one consistent version, emits **28** m
 
 ### Active (v3.0)
 
-- [ ] Re-verify all Bob surface assumptions against a live Bob Shell 2.x install; resolve the custom-mode tool-group contradiction and pin the verified set by test — *BOB2-01..05*
-- [ ] Re-vendor the gsd-core payload to 1.10.0 on one consistent version, re-applying the six Bob deltas and re-running the model-neutrality invariant — *RESYNC-01..04*
+- [x] Re-verify all Bob surface assumptions against a live Bob Shell 2.x install; resolve the custom-mode tool-group contradiction and pin the verified set by test — *Validated in Phase 12 (BOB2-01..05)*
+- [x] Re-vendor the gsd-core payload to 1.14.0 on one consistent version, re-applying the (now nine) Bob deltas and re-running the model-neutrality invariant — *Validated in Phase 13 (RESYNC-01..06, UP-03, DOCS-05)*
 - [ ] Emit Bob 2.0 agent personas so subagent-dispatching workflows run isolated instead of inline — *NATIVE-02..05*
 - [ ] Register gsd-core's companion MCP server in Bob and decide its relationship to the skills/commands surface — *MCP-01..03*
-- [ ] Determine whether `bob` can become an external/pluggable runtime descriptor, retiring the vendored registry hand-edit — *DESC-01, UP-03*
-- [ ] Run the acceptance checklist against live Bob 2.x and re-baseline it for 2.0 — *DOCS-05/06, ACCEPT-03..05*
+- [ ] Determine whether `bob` can become an external/pluggable runtime descriptor, retiring the vendored registry hand-edit — *DESC-01 (verdict NO-GO recorded in Phase 13; an upstream proposal is what remains)*
+- [ ] Run the acceptance checklist against live Bob 2.x and re-baseline it for 2.0 — *DOCS-06, ACCEPT-03..05 (blocked: the dev device is back on Bob Shell 1.0.4)*
+- [ ] Extend the neutrality invariant to agent/product brand names and selection prompts — *NEUTRAL-04, moved to its own Phase 18*
 
 Still deferred beyond v3.0: the `transition` lifecycle command, `ai-integration-phase`, the knowledge-graph/mempalace cluster, and the actual upstream PR to open-gsd/gsd-core (MERGE-01 — v3.0's descriptor spike is groundwork for it, not the PR itself).
 
@@ -76,8 +77,11 @@ Still deferred beyond v3.0: the `transition` lifecycle command, `ai-integration-
 - **Backend neutrality is a design principle**: Bob can drive multiple model CLIs; the GSD logic should not branch on which one. We emit Bob-native artifacts and let Bob route.
 - **Open-source contribution is an explicit goal**, so naming, structure, and code quality should anticipate maintainer review from day one.
 - **Development was test-deferred through v2.0**: with no Bob install on the dev device, v1/v2 leaned on Bob's official docs (bob.ibm.com) plus the close mapping to gsd-core's Cline/Cursor-family converters, choosing conservative lower-bound assumptions.
-- **(v3.0) A live Bob Shell 2.x install is now available.** The test-deferred constraint is lifted. Assumptions that v1/v2 could only record as doc-derived defaults — the custom-mode tool group, subagent parallel fan-out, the `BOB_CONFIG_DIR` override — are now settled by observation, and the long-deferred acceptance pass runs for real.
-- **(v3.0) Bob Shell 2.0 is a major release** (fresh install required; no 1.0.x upgrade path) that nonetheless leaves gsd-bob's emission contract intact: `.bob/skills/<name>/SKILL.md`, `.bob/commands/*.md`, and `~/.bob/custom_modes.yaml` are unchanged. What moved is settings (`~/.bob/settings/settings.json`), the stock mode set (Code+Advanced → one Agent mode), and the addition of new surfaces (`.bob/agents/` personas, `AGENTS.md`, lifecycle hooks, `bob mcp add`).
+- **(v3.0) A live Bob Shell 2.0.1 install was available for Phase 12**, which is how the custom-mode tool group, subagent parallel fan-out and the absence of any `BOB_CONFIG_DIR` override were settled by observation rather than left as doc-derived defaults.
+- **(2026-09-16) That install is gone — the dev device is back on Bob Shell 1.0.4**, the generation gsd-bob declares unsupported. Phase 12's findings stand (they were read out of the shipped 2.0.1 bundle and are recorded in `12-BOB2-EVIDENCE.md`), but Phase 13 was verified hermetically and the live-Bob acceptance pass is deferred again to Phase 17. `structuredPrompts: false` remains the one primitive never observed either way.
+- **(v3.0) Bob Shell 2.0 is a major release** (fresh install required; no 1.0.x upgrade path) that nonetheless leaves gsd-bob's emission contract intact: `.bob/skills/<name>/SKILL.md` and `.bob/commands/*.md` are unchanged. What moved is settings (`~/.bob/settings/settings.json`), the **global** custom-modes file (`~/.bob/settings/custom_modes.yaml` — the project path is unchanged), the stock mode set (Code+Advanced → one Agent mode), and the addition of new surfaces (`AGENTS.md`, lifecycle hooks, `bob mcp add`).
+- **(2026-09-16) `.bob/agents/` personas are undocumented.** The persona page was withdrawn (404) and no Bob page describes the directory, a persona format, or its frontmatter — so Phase 14 stays deferred rather than guessing a contract.
+- **(2026-09-16) Bob 2.0.x is the only supported host.** Bob Shell 1.0.x has no skills and no subagents, so only `.bob/commands/` and the `gsd` mode would load. There is no installer version probe and no 1.0.x test matrix.
 
 ## Constraints
 
@@ -86,7 +90,7 @@ Still deferred beyond v3.0: the `transition` lifecycle command, `ai-integration-
 - **Dependencies**: Bound to IBM Bob's actual extension capabilities (unknown until researched) and to gsd-core's evolving structure (it is the upstream source of truth).
 - **Contribution-readiness**: Adapter must be structured and documented to a standard the open-gsd maintainers would plausibly accept.
 - **~~No local Bob for testing~~ (lifted in v3.0)**: through v2.0, IBM Bob was unavailable on the development device, so all work was built against documented behavior plus conservative lower-bound assumptions, with device-runnable verification steps accruing to one deferred acceptance pass. **As of v3.0 a live Bob Shell 2.x install is available** — phases verify empirically, and any v1/v2 default that observation refutes is corrected rather than carried.
-- **Two moving upstreams**: gsd-bob is pinned to both gsd-core (vendored payload) *and* Bob's documented surface. Either can move independently; drift on either side is a correctness risk, so re-baselining both together is the maintenance rhythm (v2.0 did 1.5.0→1.6.1; v3.0 does 1.6.1→1.10.0 plus Bob 1.0.x→2.x).
+- **Two moving upstreams**: gsd-bob is pinned to both gsd-core (vendored payload) *and* Bob's documented surface. Either can move independently; drift on either side is a correctness risk, so re-baselining both together is the maintenance rhythm (v2.0 did 1.5.0→1.6.1; v3.0 does 1.6.1→1.14.0 plus Bob 1.0.x→2.0.x). Eight upstream minors in one jump also showed the cost of waiting: a patch anchor had been deleted five versions earlier and the descriptor had gone schema-invalid, both silently.
 
 ## Key Decisions
 
@@ -105,9 +109,15 @@ Still deferred beyond v3.0: the `transition` lifecycle command, `ai-integration-
 | (v2.0) Author a MAINTAINING runbook sourced from Phase-1's real re-vendor | The vendoring model requires this dance every gsd-core release; a battle-tested playbook beats aspirational docs | ✓ Good — MAINTAINING.md distilled from the real 1.5.0→1.6.1 re-vendor |
 | (v2.0 close) Seed Bob's real 270k `context_window` into `.planning/config.json` at install | Under sequential-inline execution the whole loop shares one window; gsd-core read-depth scaling defaulted to a too-low 200k | ✓ Good — installer seeds `context_window: 270000` (quick 260706-j81) |
 | (v2.0 close) Publish under `@zack-maz/gsd-bob`; no `v2.0` git tag (release tags stay npm-aligned) | npm package is 0.2.1; a `v2.0` tag would imply a nonexistent 2.0.0 release | ✓ Good — milestone recorded in MILESTONES.md; release tag is `v0.2.1` |
-| (v3.0) Re-baseline both upstreams in one milestone rather than splitting gsd-core and Bob into separate cycles | The two interact: what the 1.10.0 payload emits must satisfy Bob 2.0's actual surface. Syncing one against a stale model of the other is how the `command`/`execute` regression happened | — Pending |
+| (v3.0) Re-baseline both upstreams in one milestone rather than splitting gsd-core and Bob into separate cycles | The two interact: what the 1.14.0 payload emits must satisfy Bob 2.0's actual surface. Syncing one against a stale model of the other is how the `command`/`execute` regression happened | — Pending |
 | (v3.0) Verify Bob's surface **empirically first** (Phase 12), before the re-vendor | A live Bob 2.x is finally available; re-vendoring onto an unverified capability model would repeat v2.0's doc-derived mistakes at four versions' scale | — Pending |
-| (v3.0) Treat the external/pluggable descriptor as a **spike with a go/no-go**, not a committed migration | Upstream's descriptor architecture moved substantially (ADR-1239, capability.json, agent-converter cutover); whether `bob` fits it is unknown until tested, and a failed migration would block the whole re-baseline | — Pending |
+| (v3.0) Treat the external/pluggable descriptor as a **spike with a go/no-go**, not a committed migration | Upstream's descriptor architecture moved substantially (ADR-1239, capability.json, agent-converter cutover); whether `bob` fits it is unknown until tested, and a failed migration would block the whole re-baseline | ✓ Good — answered **NO-GO** from source in Phase 13 without spending a migration; the hand-patch stays and `UPSTREAM.md` records the evidence |
+| (Phase 13) Target **gsd-core 1.14.0**, not the roadmap's 1.10.0 | Latest is what users actually get, and nothing in 1.11–1.14 removes a surface gsd-bob uses | ✓ Good — one consistent 1.14.0 payload, idempotency proven |
+| (Phase 13) **Bob 2.0.x is the only supported target**; 1.0.x is documented as unsupported (user decision, 2026-09-16) | 1.0.x has no skills and no subagents, so only commands + the mode would load, and leaving 1.0.x requires a fresh install anyway. Supporting it would buy a version matrix and an installer probe for a dead generation | ✓ Good — single-target artifact set, no probe, README says so plainly |
+| (Phase 13) Keep `engines.node >= 22.15.0` despite upstream's `>= 24` | The only Node-24 API the payload reaches for (`RegExp.escape`) is feature-detected with an in-file fallback, and the vendored `bin` was executed on Node 22.15.0. `>=22.15.0` is the union with Bob Shell's own documented floor | ✓ Good — re-verified empirically; MAINTAINING makes it a standing step |
+| (Phase 13) Seed `workflow.use_worktrees: false` at install rather than declaring `orchestrator-worktree` | 1.14.0's isolation gate exits FATAL on `dispatch.isolation: "none"`; Bob has no git-worktree primitive, and declaring `orchestrator-worktree` would need a verified headless-Bob `orchestratorExec` | ✓ Good — preserves 1.6.1 behaviour; the spike is recorded, not assumed |
+| (Phase 13) Keep `commands/gsd/*.md` as the conversion source rather than switching to upstream's `skills/` tree | `argument-hint` parity and zero churn to goldens, roster and all three doc generators; upstream's pre-hyphenated skills are a future simplification | — Recorded, not adopted |
+| (Phase 13) **Defer NEUTRAL-04 to its own phase** rather than bundling it into the re-sync | Fuzzy prose rewriting across 31 commands under a brand-new invariant, not required for 1.14.0 correctness, and easy to half-do inside a compatibility task | — Pending (Phase 18); recorded, not dropped |
 
 ## Evolution
 
@@ -127,4 +137,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-13 — milestone v3.0 "Bob 2.0 & gsd-core 1.10 Re-baseline" started (Phases 12–17). Both upstreams moved: gsd-core 1.6.1 → 1.10.0 and Bob Shell 1.0.x → 2.x. The standing "no local Bob" constraint is lifted — a live Bob Shell 2.x install is available, so v3.0 verifies empirically. Delta research: `research/v3.0-UPSTREAM-DELTA.md`.*
+*Last updated: 2026-09-16 — Phase 13 closed. The milestone is re-targeted to gsd-core **1.14.0** (from 1.10.0) and to **Bob 2.0.x only**; the payload, installer, tests and docs are all on that baseline. NEUTRAL-04 split out into a new Phase 18. The "no local Bob" constraint is partially back: the dev device is on Bob Shell 1.0.4, so the live-Bob acceptance pass is deferred again to Phase 17. Delta research: the four `research/260916-*.md` reports.*

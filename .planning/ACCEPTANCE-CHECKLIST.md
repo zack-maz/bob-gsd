@@ -33,11 +33,11 @@ npx -y --package=@zack-maz/gsd-bob@latest -- gsd-bob --bob --local
 
 **For each step:** run the `Cmd:` line verbatim; type numbered answers when a flow prompts you. Mark `Result: [ ] pass [ ] fail` inline AND fill the matching row in `## Results Roll-Up`. Mark **fail** whenever the observed output does not match `Expect:`. **If a fail concerns a watch-list assumption** (a conservative Phase-1 default — subagent isolation, structured prompts, config-home override, IDE-vs-Shell signal), record the refutation in `.planning/ACCEPTANCE-FOLLOWUPS.md` so it becomes a tracked v2 enhancement rather than a silent gap.
 
-**Read-only by default (T-01-SC preserved):** Steps `AC-01..AC-12`, `AC-26`, and `AC-27..AC-45` are pure read-only observation and may run in any order (`AC-27..AC-45` add no new mutating `Cmd:` — `grep`/`ls`/`cat` only). The ONLY mutating commands are the already-marked install / core-loop / quality-gate / uninstall runs inside `AC-13..AC-25` (`npx … gsd-bob …`, `/gsd-*` invocations). This run scaffolding adds **no new `Cmd:` line** and does not weaken the read-only-by-default posture — run the mutating steps in the dependency order below.
+**Read-only by default (T-01-SC preserved):** Steps `AC-01..AC-12`, `AC-26`, and `AC-27..AC-50` are pure read-only observation and may run in any order (`AC-27..AC-50` add no new mutating `Cmd:` — `grep`/`ls`/`cat` only). The ONLY mutating commands are the already-marked install / core-loop / quality-gate / uninstall runs inside `AC-13..AC-25` (`npx … gsd-bob …`, `/gsd-*` invocations). This run scaffolding adds **no new `Cmd:` line** and does not weaken the read-only-by-default posture — run the mutating steps in the dependency order below.
 
 ## Execution Order
 
-1. **Read-only first (any order):** `AC-01..AC-12` (observation / `grep` / `cat` / `echo` only), `AC-26` (README / upstream doc greps), `AC-27` (model-neutrality grep), and `AC-28..AC-45` (per-command emission-recognition, `ls`/`cat` only). `AC-11`'s read-only `cat`/`grep` is most meaningful AFTER the `AC-13` install has run, but the command itself mutates nothing.
+1. **Read-only first (any order):** `AC-01..AC-12` (observation / `grep` / `cat` / `echo` only), `AC-26` (README / upstream doc greps), `AC-27` (model-neutrality grep), `AC-28..AC-48` (per-command emission-recognition, `ls`/`cat` only), and `AC-49..AC-50` (installed-artifact `cat` checks — most meaningful AFTER the `AC-13` install, but they mutate nothing). `AC-11`'s read-only `cat`/`grep` is most meaningful AFTER the `AC-13` install has run, but the command itself mutates nothing.
 2. **Mutating steps, in this exact dependency order** (each depends on prior install / loop state):
    - `AC-13` — install (`gsd-bob --bob --local`) into a fresh scratch `.bob/`.
    - `AC-14` — re-run the same install (idempotency), after seeding a user mode/command/rule.
@@ -98,6 +98,11 @@ The single at-a-glance pass/fail record to report. Mark each row (keep the inlin
 | AC-43 | [ ] pass  [ ] fail | |
 | AC-44 | [ ] pass  [ ] fail | |
 | AC-45 | [ ] pass  [ ] fail | |
+| AC-46 | [ ] pass  [ ] fail | |
+| AC-47 | [ ] pass  [ ] fail | |
+| AC-48 | [ ] pass  [ ] fail | |
+| AC-49 | [ ] pass  [ ] fail | |
+| AC-50 | [ ] pass  [ ] fail | |
 
 ---
 
@@ -414,4 +419,39 @@ Result: [ ] pass  [ ] fail
 Cmd:    On a real Bob machine, read-only inspect the emitted Bob slash command for the `pause-work` command and confirm Bob recognizes it. List and read (no edits) the emitted file `gsd-pause-work.md` in the `.bob/commands/` directory using `ls` and `cat` only, and observe the command in Bob's slash-command palette / listing. No file is written, moved, or deleted.
 Expect: `.bob/commands/gsd-pause-work.md` exists with `description:` (and, where applicable, `argument-hint:`) frontmatter and a `$1` positional-arg body; Bob lists the command and shows its description as `/gsd-pause-work` (hyphen form).
 Confirms: ACCEPT-01, CMD-01 — device-runnable emission/recognition step for the newly added Phase 9 command `pause-work`.
+Result: [ ] pass  [ ] fail
+
+## AC-46 — next command emitted + recognized under Bob (read-only) (ACCEPT-01)
+
+Cmd:    On a real Bob machine, read-only inspect the emitted Bob slash command for the `next` command and confirm Bob recognizes it. List and read (no edits) the emitted file `gsd-next.md` in the `.bob/commands/` directory using `ls` and `cat` only, and observe the command in Bob's slash-command palette / listing. No file is written, moved, or deleted.
+Expect: `.bob/commands/gsd-next.md` exists with `description:` (and, where applicable, `argument-hint:`) frontmatter and a `$1` positional-arg body; Bob lists the command and shows its description as `/gsd-next` (hyphen form).
+Confirms: ACCEPT-01, RESYNC-04 — device-runnable emission/recognition step for the newly added Phase 13 command `next`.
+Result: [ ] pass  [ ] fail
+
+## AC-47 — onboard command emitted + recognized under Bob (read-only) (ACCEPT-01)
+
+Cmd:    On a real Bob machine, read-only inspect the emitted Bob slash command for the `onboard` command and confirm Bob recognizes it. List and read (no edits) the emitted file `gsd-onboard.md` in the `.bob/commands/` directory using `ls` and `cat` only, and observe the command in Bob's slash-command palette / listing. No file is written, moved, or deleted.
+Expect: `.bob/commands/gsd-onboard.md` exists with `description:` (and, where applicable, `argument-hint:`) frontmatter and a `$1` positional-arg body; Bob lists the command and shows its description as `/gsd-onboard` (hyphen form).
+Confirms: ACCEPT-01, RESYNC-04 — device-runnable emission/recognition step for the newly added Phase 13 command `onboard`.
+Result: [ ] pass  [ ] fail
+
+## AC-48 — quick-batch command emitted + recognized under Bob (read-only) (ACCEPT-01)
+
+Cmd:    On a real Bob machine, read-only inspect the emitted Bob slash command for the `quick-batch` command and confirm Bob recognizes it. List and read (no edits) the emitted file `gsd-quick-batch.md` in the `.bob/commands/` directory using `ls` and `cat` only, and observe the command in Bob's slash-command palette / listing. No file is written, moved, or deleted.
+Expect: `.bob/commands/gsd-quick-batch.md` exists with `description:` (and, where applicable, `argument-hint:`) frontmatter and a `$1` positional-arg body; Bob lists the command and shows its description as `/gsd-quick-batch` (hyphen form).
+Confirms: ACCEPT-01, RESYNC-04 — device-runnable emission/recognition step for the newly added Phase 13 command `quick-batch`.
+Result: [ ] pass  [ ] fail
+
+## AC-49 — installer seeds workflow.use_worktrees:false into .planning/config.json (read-only) (RESYNC-05)
+
+Cmd:    On a real Bob machine, after the `AC-13` install has run, read the project's planning config with `cat .planning/config.json` (read-only; no edits). Inspect the `workflow` object and the top-level `context_window`.
+Expect: `workflow.use_worktrees` is `false`, `workflow.text_mode` is `true`, and `context_window` is `270000`. No `runtime` key is present — `.planning/config.json` is the Claude-runtime interchange surface and must not pin a runtime. With `use_worktrees:false` present, `/gsd-execute-phase` dispatches instead of exiting `FATAL: runtime declares no executor-isolation primitive` (gsd-core 1.14.0 refuses to dispatch a wave on a runtime whose descriptor declares `dispatch.isolation: "none"`, which Bob's does — Bob has context isolation via `spawn_subagent` but no git-worktree primitive).
+Confirms: RESYNC-05, ACCEPT-01 — the three adapter-owned config keys are seeded by the real install, and the 1.14.0 isolation gate is satisfied.
+Result: [ ] pass  [ ] fail
+
+## AC-50 — installed payload carries the bob runtime marker (read-only) (RESYNC-05)
+
+Cmd:    On a real Bob machine, after the `AC-13` install has run, read the per-install runtime marker with `cat .bob/gsd-core/.gsd-runtime` (read-only; no edits). For a global install the path is `~/.bob/gsd-core/.gsd-runtime`.
+Expect: the file exists and its only content is `bob` (plus a trailing newline). gsd-core resolves the active runtime as `GSD_RUNTIME` > `config.runtime` > this marker > `claude`, so without it every `dispatch-*` query silently answers for the Claude-runtime descriptor. Cross-check read-only: `node .bob/gsd-core/bin/gsd-tools.cjs query dispatch-isolation --json` reports runtime `bob` and isolation `none`.
+Confirms: RESYNC-05, ACCEPT-01 — the runtime ladder resolves the `bob` descriptor from the installed payload.
 Result: [ ] pass  [ ] fail

@@ -21,139 +21,101 @@ A standalone, installable adapter package that makes **open-gsd** — the GSD ("
 
 ## Technology Stack
 
-## Executive Frame
+Installer + tools: **Node `>=22.15.0`**, **CommonJS `.cjs`**, **node builtins only**
+(`node:fs`, `node:path`, `node:os`) in the install/staging path — the single runtime dependency,
+`js-yaml`, is confined to `src/bob-adapter.cjs` for the `custom_modes.yaml` merge — argv hand-parsed, matching
+gsd-core's own installer so the work stays upstream-mergeable. Distribution is
+`npx -y --package=@zack-maz/gsd-bob@latest -- gsd-bob --bob --<scope>`.
 
-## How gsd-core Actually Works (verified from live source)
+Do **not** add: a CLI framework (`commander`/`oclif`/`yargs`), `fs-extra`/`copyfiles`/`cpy`,
+`chalk`/`ora`, ESM (`"type":"module"`), a YAML parser in the install path (frontmatter is
+hand-sliced; `js-yaml` is already used only for the `custom_modes.yaml` merge), or
+`@anthropic-ai/claude-agent-sdk` (gsd-bob is backend-agnostic by design).
 
-- Name: `@opengsd/gsd-core`, latest **`1.5.0`** (dist-tag `next`: `1.5.0-rc.5`).
-- `bin` map: `gsd-core` → `bin/install.js` (the npx installer entry), `gsd-tools` → `gsd-core/bin/gsd-tools.cjs`, `gsd_run` → `gsd-core/bin/gsd_run`.
-- `engines`: **node `>=22.0.0`, npm `>=10.0.0`**.
-- Runtime deps: only `@anthropic-ai/claude-agent-sdk@^0.2.84` and `ws@^8.21.0`. (Effectively dependency-light; the install/runtime core is plain Node.)
-- `--<runtime>`: `--claude`, `--codex`, `--gemini`, `--cursor`, `--opencode`, `--copilot`, `--antigravity`, `--cline`, `--kilo`, `--kimi`, `--windsurf`, `--augment`, `--trae`, `--qwen`, `--hermes`, `--codebuddy`, plus `--all` / `--both`. No runtime flag → interactive prompt.
-- `--<scope>`: `--local`/`-l` (install into `./<dir>` in the project) or `--global`/`-g` (install into the runtime's home dir).
-- Other flags: `--config-dir`/`-c <path>` (explicit override), `--profile=<core|standard|full>` (`--minimal`/`--core-only` alias core), `--uninstall`/`-u`, `--dry-run`, `--portable-hooks`, `--force-statusline`, `--help`.
-- **There is no separate `--clean`/`--update` flag** in the install entry. "Update" = re-run the same install command (the installer re-stages artifacts and reads the persisted active profile via `writeActiveProfile()`/read marker); the dedicated `/gsd-update` workflow drives version checks via `bin/check-latest-version.cjs` (which hardcodes the package name as a constant so the model can't query the wrong name). "Clean" = `--uninstall` then install. **gsd-bob should replicate exactly this convention** (re-run = update, uninstall+install = clean) rather than invent new flags — this keeps UX identical and upstreaming trivial.
+## How gsd-core Actually Works (verified 2026-09-16 against the vendored 1.14.0 tree)
 
-## IBM Bob Extension Surface (verified from bob.ibm.com docs)
+- Name: `@opengsd/gsd-core`, latest **`1.14.0`**. gsd-bob vendors it under `gsd-core/`
+  (`gsd-core/VERSION`), five curated subdirs: `bin contexts references templates workflows`.
+- `bin` map (4 entries): `gsd-core` → `bin/install.js`, `gsd-tools` → `gsd-core/bin/gsd-tools.cjs`,
+  `gsd_run` → `gsd-core/bin/gsd_run`, **`gsd-mcp-server`** (added since 1.6.1).
+- `engines` upstream: **node `>=24.0.0`**, npm `>=10`. **gsd-bob stays at `>=22.15.0`** — the only
+  Node-24 API the payload reaches for (`RegExp.escape`) is feature-detected with an in-file
+  fallback, and the vendored `bin` was executed on Node 22.15.0 during the re-vendor. Re-verify on
+  every bump (MAINTAINING step 8).
+- 72 commands upstream; gsd-bob curates **31** (`commands/gsd/*.md`) and emits all 31 — 0 unsupported.
+- **There is no separate `--clean`/`--update` flag.** "Update" = re-run the same install command;
+  "clean" = `--uninstall` then install. gsd-bob replicates this exactly — never invent new flags.
+- The legacy `/gsd:<cmd>` colon form is deprecated upstream; only the hyphen form `gsd-<cmd>` is
+  routable (and matches Bob's filename→command rule).
+- The runtime registry is **generated** from `capabilities/<id>/capability.json`
+  (`role: "runtime"` is copied into `runtimes[id]` verbatim), and `VALID_CONVERTER_NAMES` in
+  `capability-validator.cjs` is a **closed allowlist** a descriptor's converters must be on.
+- **External/pluggable runtime descriptors are a NO-GO** (verified): every module that resolves a
+  runtime `require`s the frozen `capability-registry.cjs` directly and never calls
+  `capability-loader.cjs`'s `loadRegistry`. The vendored hand-patch stays. See
+  `.planning/research/260916-gsd-core-1.14.0-delta.md` §2.6 and `UPSTREAM.md`.
+- **1.14.0 behavioural gate:** `execute-phase`'s isolation-dispatch step exits `FATAL` on a runtime
+  whose descriptor declares `dispatch.isolation: "none"` unless `workflow.use_worktrees=false`.
+  The installer seeds that key; `.planning/config.json` gets **no** `runtime` key (it is the
+  Claude↔Bob interchange surface) — runtime identity lives in `gsd-core/.gsd-runtime`.
+
+## IBM Bob Extension Surface (verified 2026-09-16: docs + the shipped bundles)
+
+**Supported target: Bob 2.0.x only** (Bob Shell 2.0.0–2.0.4, Bob IDE 2.x). Bob Shell 1.0.x has
+**no skills and no subagents**, so only commands + the mode would load, and 2.0.0 requires a
+fresh install anyway — no version probe, no compatibility matrix. Bob Shell 2.x itself needs
+Node 24.
 
 | Bob primitive | On-disk format | Location (project / global) | Maps to GSD primitive |
 |---|---|---|---|
-| **Agent Skill** | `SKILL.md`, YAML frontmatter `name` + `description` (only two documented fields); supports nested `scripts/`, `references/`, `assets/` | `.bob/skills/<name>/SKILL.md` / `~/.bob/skills/<name>/SKILL.md` | GSD skill (`SKILL.md`) — **direct 1:1**, near-identical to Claude/Cursor layout |
+| **Agent Skill** | `SKILL.md`, frontmatter `name` + `description` only; supports nested `scripts/`, `references/`, `assets/` | `.bob/skills/<name>/SKILL.md` / `~/.bob/skills/<name>/SKILL.md` | GSD skill — **direct 1:1** |
 | **Slash command** | `<name>.md`, frontmatter `description` + `argument-hint`; filename → command name; `$1`/`$2` positional args | `.bob/commands/<name>.md` / `~/.bob/commands/<name>.md` | GSD slash command (workflow entry) |
-| **Custom Mode** | YAML entries in `customModes[]` with `slug`, `name`, `roleDefinition`, `whenToUse`, `customInstructions`, `groups` | project: `.bob/custom_modes.yaml` (repo root); global: `~/.bob/settings/custom_modes.yaml` (IDE); BobShell variant under `/docs/shell/configuration/custom-modes-bobshell` | GSD "modes" / context partitioning (optional, v2) |
-| **Bob Rules** | plain-text rule files; `.bobrules-{mode-slug}` single-file form supported | `.bobrules/` folder or `.bobrules-*` in workspace root | GSD project rules / always-on instructions |
-| **AGENTS.md** | markdown context files generated by `/init`, one per mode + root | `.bob/` | GSD `AGENTS.md`/context convention (already aligned across the ecosystem) |
-| **MCP** | MCP server config | Bob MCP config | GSD MCP-tool surface (e.g. context7) — Bob-native |
-| **BobShell (`bob`)** | terminal CLI; `--auth-method api-key` + `BOBSHELL_API_KEY` for headless/CI; install via curl script, npm/pnpm/yarn, or IDE palette | n/a | the host runtime gsd-bob targets for non-interactive flows |
+| **Custom Mode** | YAML `customModes[]` with `slug`, `name`, `roleDefinition`, `whenToUse`, `customInstructions`, `groups` | **scope-asymmetric:** project `.bob/custom_modes.yaml`; global **`~/.bob/settings/custom_modes.yaml`** — owned solely by `modesRelPathForScope()`, never re-inline the literal | the emitted `gsd` mode |
+| **Bob Rules** | plain-text rule files | `.bob/rules/`, `.bob/rules-{mode}/`, `.bobrules`, `.bobrules-{mode}` (+ `~/.bob/rules/`) | GSD project rules |
+| **AGENTS.md** | markdown context, generated by `/init` | `~/.bob/AGENTS.md`, workspace `AGENTS.md` | GSD context convention (Phase 14) |
+| **Settings / hooks** | `hooks` key in settings JSON | `.bob/settings.json`, `~/.bob/settings/settings.json` | Bob 2.x lifecycle hooks (Phase 14, deferred) |
+| **MCP** | `bob mcp add` / config JSON | `.bob/mcp.json`, `~/.bob/settings/mcp_settings.json` | GSD MCP surface (Phase 15, deferred) |
+| **Bob Shell (`bob`)** | terminal CLI; `bob run` for non-interactive, API key via **`BOB_API_KEY`**; `--trust` for untrusted folders | n/a | the host runtime for headless flows |
 
-**Custom-mode `groups` are load-bearing (verified):**
-- A mode with `groups` **omitted** gets **no grouped tools** — `groups` is not optional if the mode needs to read/edit/execute. (This is why BUG 1's invalid `command` token was fatal: the emitted mode silently had no execute capability.)
-- Valid tool-group set: `read, edit, execute, mcp, skill, workflow, todo, subtask, subagent, mode`. The terminal-command token is **`execute`**, **NOT** `command` (there is no `command` group).
-- Native **`workflow`** and **`skill`** tool groups exist — a mode can be granted the ability to invoke workflows / skills (mapping context for a future milestone; native `workflow`-group emission is out of scope here).
-- The **`edit`** group supports **`fileRegex`** file restrictions (scope which paths a mode may edit).
-- **Skills require "Advanced mode"** and are **approval-gated by default** (Auto-Approve → Skills toggle must be enabled for auto-activation).
-
-## Recommended Stack
-
-### Core Technologies
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **Node.js** | `>=22.15.0` (engines `>=22`) | Installer + `gsd-tools.cjs` runtime | Matches gsd-core (`>=22.0.0`) AND Bob Shell (`>=22.15.0`) exactly; `>=22.15.0` is the tighter of the two and the correct floor. Use Node 22 LTS ("Jod") as the baseline; works on 24/25. |
-| **CommonJS (`.cjs`)** | n/a | Module format for installer + tools | gsd-core ships CJS (`gsd-tools.cjs`, `install.js`, `bin/lib/*.cjs`). To be upstream-mergeable and to reuse the shim resolver verbatim, gsd-bob's runtime/installer code must also be CJS. (gsd-core authors in TypeScript and *compiles to .cjs at publish* per ADR-457 — adopt the same source-of-truth-TS → publish-CJS pattern only if you want type safety; pure hand-written CJS is also acceptable for a small adapter.) |
-| **npm + npx** | npm `>=10` | Distribution channel | Mirrors `npx -y --package=@zack-maz/gsd-bob@latest -- gsd-bob --bob --<scope>`. Zero-install UX identical to existing GSD users. |
-| **Node built-ins only** (`node:fs`, `node:path`, `node:os`, `node:child_process`) | n/a | Filesystem staging, home-dir resolution, runtime detection | gsd-core's installer and `runtime-homes.cjs` use *only* built-ins. Keeping gsd-bob dependency-free for install/staging is the single biggest contribution-readiness and security win. |
-
-### Supporting Libraries
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| **(none for the installer)** | — | — | Default position. Do NOT add a CLI framework, a copy lib, or a YAML lib for the installer path. gsd-core proves you don't need them. |
-| `js-yaml` | `^4.1.0` | Read/emit Bob `custom_modes.yaml` *if* you port Modes | ONLY if v2 adds custom-mode emission. v1 (skills + commands) needs no YAML parser — frontmatter is hand-sliced like gsd-core's converters do. Defer. |
-| `@anthropic-ai/claude-agent-sdk` | `^0.2.84` | (Inherited only if vendoring gsd-core payload that uses it) | Do not add directly. It is gsd-core's dep for Claude-backed agent spawning; gsd-bob is backend-agnostic and should not depend on a Claude SDK. If the vendored payload references it, isolate it so the Bob path never requires it. |
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| **TypeScript** (`^5.x`) + `tsc` | Optional: author runtime descriptor/converters as `.cts`, compile to `.cjs` at publish | Matches gsd-core's ADR-457 "build-at-publish" pattern (`*.cts` → gitignored `.cjs` at same require path). Adopt for upstream parity; skip for a thin standalone adapter. |
-| **Vitest** or **node:test** | Unit tests for the converter + path resolver | gsd-core tests assert on typed enums/records, never raw console text — mirror that to be PR-acceptable. `node:test` keeps zero deps. |
-| **Biome** or **ESLint** | Lint | Match whatever gsd-core's `CONTRIBUTING.md` mandates before opening an upstream PR. |
-| **npm `prepublishOnly`** | Stage the vendored gsd-core payload + compile | gsd-bob bundles the GSD skill/workflow payload at publish time, like gsd-core bundles `gsd-core/`. |
-
-## Installation (gsd-bob's own, mirroring gsd-core)
-
-# End-user one-liner (the UX we ship)
-
-# "update" = re-run the install command (re-stages, reads persisted profile)
-
-# Dev dependencies for building gsd-bob itself (only if adopting the TS-at-publish pattern)
-
-## What gsd-bob Adds (the deliverable, in gsd-core's vocabulary)
-
-## Alternatives Considered
-
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| Mirror gsd-core's plain-Node CJS installer | Build a fresh installer with a CLI framework (`commander`, `oclif`, `yargs`) | Never for v1. A framework adds deps and *diverges* from gsd-core, hurting upstreamability. gsd-core proves arg-parsing-by-hand is sufficient. Reconsider only if gsd-bob grows a large standalone CLI surface unrelated to GSD. |
-| Vendor gsd-core payload into gsd-bob, ship standalone | Depend on `@opengsd/gsd-core` as an npm dependency and shell into its installer | Tempting, but gsd-core's installer doesn't know `bob` yet, so you'd still fork the registry. Vendoring (v1) decouples release cadence and is the project's stated decision; switch to a dependency-on + upstreamed-`bob`-runtime once the PR lands. |
-| TS-source → publish-CJS (ADR-457) | Hand-written `.cjs` only | Hand-written CJS is fine for a thin adapter and lowers the build toolchain. Adopt TS only when you intend the converters to be merged into gsd-core's own TS tree (then matching ADR-457 is required). |
-| Bob **Agent Skills** as the primary target | Bob **Custom Modes** as the primary target | Skills are the right v1 vehicle: per-skill activation by description matches GSD's ~70 skills 1:1 and needs no global config surgery. Modes (`custom_modes.yaml`) are a heavier, IDE-global construct — defer to v2 for orchestrator-style flows. |
-| Bob slash commands for explicit invocation | Skills-only (rely on Bob auto-activating by description) | Ship BOTH where GSD has both (gsd-core already emits skills+commands for Cursor/Codex). Commands give users the explicit `/gsd-plan-phase` entry; skills give auto-activation. |
-
-## What NOT to Use
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| ESM (`"type":"module"`) for the installer/tools | gsd-core ships CJS; the `gsd_run` shim and `gsd-tools.cjs` resolver are CJS; ESM breaks the verbatim-reuse + upstream-merge story | CommonJS `.cjs` (optionally TS-compiled-to-CJS) |
-| A CLI framework (`commander`/`oclif`/`yargs`) | Adds dependencies, diverges from gsd-core's hand-rolled `selectRuntimesFromArgs()`, hurts mergeability and audit surface | Hand-parse `process.argv` exactly as `bin/install.js` does |
-| `fs-extra`, `copyfiles`, `cpy` | Unnecessary deps; gsd-core stages with `node:fs` (`cpSync`/`mkdirSync`) only | `node:fs` built-ins |
-| A YAML parser in the v1 install path | v1 emits skills/commands (markdown + frontmatter), which are hand-sliced like every gsd-core converter; no YAML emitted until Modes (v2) | Defer `js-yaml` to the Modes milestone |
-| `chalk`/`ora`/heavy TTY libs | Dependency weight for cosmetic output; gsd-core keeps installer output plain | Plain `console.log` / minimal ANSI if needed |
-| Depending on `@anthropic-ai/claude-agent-sdk` in the Bob path | Violates backend-agnostic principle; couples gsd-bob to Claude | Emit Bob-native artifacts; let Bob route the model |
-| Inventing new `--clean`/`--update` flags | gsd-core has no such flags (re-run = update, `--uninstall`+install = clean); diverging breaks UX parity and upstreaming | Replicate gsd-core's convention exactly |
-| The legacy `/gsd:<cmd>` colon command form | gsd-core deprecated it (#2808); only `gsd-<cmd>` hyphen form is routable | Hyphen form `gsd-<cmd>` (matches Bob filename→command rules) |
-| Targeting `trae-agent`-style YAML configs by analogy | Bob is NOT config-file-routed like some CLIs; it's skills/commands/rules-driven | Use Bob's documented `.bob/skills`, `.bob/commands`, `.bobrules`, `custom_modes.yaml` |
-
-## Stack Patterns by Variant
-
-- Vendor the GSD payload under `gsd-bob/gsd-core/`, hand-write or TS-compile a `bob` runtime descriptor + 2 converters, own version/installer.
-- Because: decouples from gsd-core release cadence and lets you prove the translation before negotiating a merge (project's Key Decision).
-- Submit the 5 artifacts (registry entry, 2 converters, alias, configHome/getDirName, shim branch) as a PR; switch gsd-bob to depend on `@opengsd/gsd-core` and drop the vendored copy.
-- Because: gsd-core's whole architecture is built to absorb new runtimes this way; a merged `bob` runtime is the long-term home.
-- The converter must *strip* unsupported keys (`effort`, `allowed-tools`, `argument-hint` on skills) rather than pass them through, to avoid Bob ignoring or erroring on the skill.
-- Because: Bob docs say only `name`+`description` are read; extra keys are at best inert, at worst cause the skill to be skipped (a skill *without* a usable description "is ignored").
-- Same `.bob/skills` + `.bob/commands` artifacts work for both; for CI use `--auth-method api-key` + `BOBSHELL_API_KEY`. No artifact difference — only the host launch differs.
-
-## Version Compatibility
-
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| gsd-core `1.5.0` | Node `>=22.0.0`, npm `>=10` | Current latest; mirror its engines. |
-| Bob Shell (`bob`) | Node `>=22.15.0` | Tighter floor than gsd-core; adopt `>=22.15.0` as gsd-bob's engine to satisfy both. |
-| gsd-bob installer | `node:fs`/`node:path`/`node:os` only | No third-party runtime deps in the install/staging path — keeps the security/audit surface minimal and matches gsd-core. |
-| `@anthropic-ai/claude-agent-sdk@^0.2.84` | gsd-core internal only | Do not introduce into gsd-bob's Bob path; backend-agnostic by design. |
-| Bob SKILL.md frontmatter (`name`,`description`) | Claude/Cursor flat skill layout | Converter must reduce GSD's richer frontmatter to these two fields. |
-
-## Open Items / Assumptions to Validate in a Spike
-
-- **CLOSED (verified 2026-07-07):** The `BOB_CONFIG_DIR` env override is **NOT documented** — there is no honored relocation override, so `~/.bob` is fixed. **Recommendation: drop the env-override branch from the descriptor and treat `~/.bob` as fixed.**
-- **CORRECTED (verified 2026-07-07 — supersedes the old "D-02 sequential-inline / no isolated subagents" note):** Bob **HAS** isolated subagents — `spawn_subagent`, an isolated context window, and a `subagent` tool group (bob.ibm.com/docs/ide/features/subagents). The primitive that stays **unconfirmed** is **parallel subagent fan-out** (multiple concurrent subagents). The capability map gates only `parallelSubagentFanout` (see `src/bob-adapter.cjs` `PRIMITIVE_REASONS` + `BOB_CAPABILITY_DECL` in `src/installer/stage.cjs`); `gsd-autonomous` is **supported** (it only needs isolation). There is no "no isolated subagents / sequential-inline lower bound".
-- **Assumption (MEDIUM):** Bob slash-command frontmatter supports only `description` + `argument-hint` (no `allowed-tools`/`model`). Converter should not rely on others.
-- **Unverified:** Whether Bob skills can programmatically *invoke* a slash command or another skill (GSD workflows chain skills). If Bob lacks skill→command invocation, the parity-first rule flags any GSD skill that depends on it. Test in a Bob spike before locking the port list.
-- **Unverified (still open):** Whether Bob enforces a max description length (Claude caps ~1024 chars). GSD descriptions are short, so low risk.
-- **Unverified (still open):** BobShell non-interactive supports the same skill auto-activation as the IDE. Headless skill activation must be spike-tested for the CI story.
-- **Unconfirmed (still open):** Subagent **parallel fan-out** (multiple concurrent subagents) — isolation is confirmed, but concurrent spawning is not documented; this is the conservative gated lower bound.
+**Facts that bite:**
+- **Config home `~/.bob` is fixed.** No env override relocates it (the shipped bundle computes
+  `path.join(os.homedir(), ".bob")`; there is no `BOB_CONFIG_DIR`). The descriptor declares
+  `env: []` — the field must stay present because gsd-core's `dot-home` branch iterates it.
+- **`groups` validates as an OPEN string union, not an enum.** An unrecognised token loads
+  silently and grants no tool, so the emitted set must be pinned by test. Verified vocabulary:
+  `read, edit, execute, mcp, skill, workflow, todo, subtask, subagent, mode`; `command` is a
+  back-compat **alias** Bob normalizes to `execute` (`execute` is canonical and what we emit).
+  A mode with `groups` omitted gets no grouped tools at all.
+- **Subagents:** `spawn_subagent` gives an isolated context window and **parallel fan-out**
+  ("Multiple spawn_subagent calls in one turn run in parallel"); **nesting is forbidden**. There
+  is **no git-worktree primitive** — hence `dispatch.isolation: "none"`.
+- **Bob 2.0.1+ never auto-approves writes into `~/.bob`**, and settings writes always need
+  explicit approval — expect a prompt on a global install run from inside a Bob session.
+- **Untrusted folders:** project-scoped commands, skills, modes, rules, `AGENTS.md` and MCP
+  servers are not loaded. `bob --trust` / `bob run --trust`, or the folder-trust dialog.
+- **`.bob/agents/` persona files are not documented anywhere** (the page was withdrawn, 404) —
+  Phase 14 stays deferred rather than guessing a format.
+- No structured-choice prompt primitive → `workflow.text_mode: true` is seeded. Bob's real
+  context window is **270k** → `context_window: 270000` is seeded.
 
 ## Sources
 
-- Live source `~/.claude/gsd-core/` v1.5.0 — `bin/lib/package-identity.cjs`, `runtime-homes.cjs`, `runtime-name-policy.cjs`, `capability-registry.cjs`, `runtime-artifact-conversion.cjs`, `runtime-config-adapter-registry.cjs`, `runtime-slash.cjs`, `bin/gsd_run`, `bin/shared/runtime-aliases.manifest.json`, installed skill frontmatter — HIGH confidence (read directly).
-- npm registry `npm view @opengsd/gsd-core` — version `1.5.0`, `bin`, `engines` (node `>=22`, npm `>=10`), deps (`@anthropic-ai/claude-agent-sdk@^0.2.84`, `ws@^8.21.0`), dist-tags — HIGH.
-- `bin/install.js` (GitHub raw, open-gsd/gsd-core@main) — installer flags (`--local/--global`, runtime flags, `--config-dir`, `--profile`, `--uninstall`, `--dry-run`), runtime selection, scope resolution, staging steps — HIGH.
-- IBM Bob docs — Skills (`bob.ibm.com/docs/ide/features/skills`): `.bob/skills` + `~/.bob/skills`, `SKILL.md` `name`+`description`, nested resources, project-over-global precedence — HIGH (official).
-- IBM Bob docs — Slash commands (`bob.ibm.com/docs/ide/features/slash-commands`): `.bob/commands` + `~/.bob/commands`, filename→command, `description`+`argument-hint`, `$1/$2` — HIGH (official).
-- IBM Bob docs — Custom modes (`~/.bob/settings/custom_modes.yaml`, `customModes[]` shape), Rules (`.bobrules`/`.bobrules-{mode-slug}`), Bob Shell install (`bob` CLI, Node `>=22.15.0`, `--auth-method api-key` + `BOBSHELL_API_KEY`) — MEDIUM-HIGH (official docs, some via search synthesis).
-- Verified Bob absent from gsd-core's `gsd-tools.cjs` shim (no `.bob`/`BOBSHELL` reference) — HIGH, confirms gsd-bob must add the runtime.
+- The vendored `gsd-core/` 1.14.0 tree, read directly — `capability-registry.cjs`,
+  `capability-validator.cjs`, `runtime-artifact-conversion.cjs`, `runtime-homes.cjs`,
+  `runtime-name-policy.cjs`, `capability-loader.cjs`, `host-integration.cjs`,
+  `references/gsd-run-resolver.md`, `workflows/execute-phase/steps/executor-isolation-dispatch.md`
+  — HIGH.
+- `.planning/research/260916-gsd-core-1.14.0-delta.md` — the sourced 1.6.1 → 1.14.0 code delta
+  (registry schema, converter exports, resolver, Node floor, dispatch gate, 14 ranked risks) — HIGH.
+- `.planning/research/260916-bob-shell-docs.md` (all 40 Shell pages, per-version table, 10 doc
+  contradictions) and `260916-bob-ide-docs.md` (all 98 IDE pages) — HIGH (official docs).
+- `.planning/research/260916-bob-1.0.4-bundle.md` — the shipped Bob Shell 1.0.4 bundle read as
+  code (this machine's install) — HIGH, and the basis for the 1.0.x-unsupported decision.
+- `.planning/phases/12-bob-2-0-capability-re-verification/12-BOB2-EVIDENCE.md` — the live Bob
+  Shell 2.0.1 bundle evidence (modes-path asymmetry, `execute` canonical, fan-out, no config-home
+  override) — HIGH.
+- `.planning/phases/13-gsd-core-1-14-0-re-sync/13-REVENDOR-NOTES.md` — the real re-vendor log the
+  MAINTAINING runbook is corrected from.
 
 <!-- GSD:stack-end -->
 
