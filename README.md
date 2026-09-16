@@ -1,5 +1,10 @@
 # gsd-bob
 
+[![npm version](https://img.shields.io/npm/v/%40zack-maz%2Fgsd-bob?label=npm%20%40zack-maz%2Fgsd-bob)](https://www.npmjs.com/package/@zack-maz/gsd-bob)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![IBM Bob 2.x](https://img.shields.io/badge/IBM%20Bob-2.0.x-0f62fe.svg)](https://bob.ibm.com)
+[![gsd-core 1.14.0](https://img.shields.io/badge/gsd--core-1.14.0-6929c4.svg)](https://github.com/open-gsd/gsd-core)
+
 **GSD for IBM Bob** — an installable adapter that makes [open-gsd](https://github.com/open-gsd/gsd-core),
 the spec-driven "Getting Stuff Done" planning framework, run natively inside
 [IBM Bob](https://bob.ibm.com). Install with one command and run the full GSD planning loop
