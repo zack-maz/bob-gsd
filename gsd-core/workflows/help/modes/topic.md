@@ -1,3 +1,5 @@
+Apply response_language to all user-facing prose — narration between tool calls, status updates, progress notes, and findings included; preserve code, paths, and identifiers.
+
 <purpose>
 Emit a section from the full reference for the topic in `$ARGUMENTS`. Read `workflows/help/modes/full.md`, resolve the topic alias to a section heading using the table below, and output the resolved-routing preamble plus the section content. Scope is controlled by a `--brief` flag in `$ARGUMENTS`: full scope (default) emits the entire section; compact scope (`--brief <topic>`) emits only the signature line + one-line summary for a compact scoped lookup. No additions, no surrounding chrome.
 </purpose>
@@ -7,15 +9,16 @@ Emit a section from the full reference for the topic in `$ARGUMENTS`. Read `work
 
 | Topic alias(es) | Section heading in `full.md` |
 |---|---|
+| `next`, `smart-entry` | `### Smart Entry` |
 | `workflow`, `core`, `core-workflow` | `## Core Workflow` (entire section through end of `### Quick Mode`) |
-| `init`, `new-project` | `### Project Initialization` |
-| `map`, `map-codebase` | The `/gsd:map-codebase` block under `### Project Initialization` |
+| `init`, `new-project`, `onboard`, `onboarding`, `brownfield` | `### Project Initialization` |
+| `map`, `map-codebase` | The `/gsd-map-codebase` block under `### Project Initialization` |
 | `discuss`, `discuss-phase` | The `/gsd-discuss-phase` block under `### Phase Planning` |
 | `plan`, `planning`, `plan-phase` | `### Phase Planning` |
 | `execute`, `exec`, `execute-phase` | `### Execution` |
 | `progress`, `route` | `### Progress Tracking` plus `### Smart Router` |
 | `quick`, `quick-mode` | `### Quick Mode` |
-| `fast` | The `/gsd:fast` block under `### Quick Mode` |
+| `fast` | The `/gsd-fast` block under `### Quick Mode` |
 | `phase`, `phases`, `roadmap` | `### Roadmap Management` |
 | `milestone`, `milestones` | `### Milestone Management` plus `### Milestone Auditing` |
 | `session`, `pause`, `resume` | `### Session Management` |

@@ -175,7 +175,7 @@ All 4 phases shipped
 
 `/clear` then:
 
-`/gsd:new-milestone`
+`/gsd-new-milestone`
 
 ---
 ```

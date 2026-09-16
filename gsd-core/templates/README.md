@@ -13,16 +13,22 @@ These files live directly at `.planning/` — not inside phase subdirectories.
 | File | Template | Produced by | Purpose |
 |------|----------|-------------|---------|
 | `PROJECT.md` | `project.md` | `/gsd-new-project` | Project identity, goals, requirements summary |
-| `ROADMAP.md` | `roadmap.md` | `/gsd:new-milestone`, `/gsd-new-project` | Phase plan with milestones and progress tracking |
-| `STATE.md` | `state.md` | `/gsd-new-project`, `/gsd:health --repair` | Current session state, active phase, last activity |
-| `REQUIREMENTS.md` | `requirements.md` | `/gsd:new-milestone` | Functional requirements with traceability |
-| `MILESTONES.md` | `milestone.md` | `/gsd:complete-milestone` | Log of completed milestones with accomplishments |
+| `ROADMAP.md` | `roadmap.md` | `/gsd-new-milestone`, `/gsd-new-project` | Phase plan with milestones and progress tracking |
+| `STATE.md` | `state.md` | `/gsd-new-project`, `/gsd-health --repair` | Current session state, active phase, last activity |
+| `REQUIREMENTS.md` | `requirements.md` | `/gsd-new-milestone` | Functional requirements with traceability |
+| `MILESTONES.md` | `milestone.md` | `/gsd-complete-milestone` | Log of completed milestones with accomplishments |
 | `BACKLOG.md` | *(inline)* | `/gsd-add-backlog` | Pending ideas and deferred work |
-| `LEARNINGS.md` | *(inline)* | `/gsd:extract-learnings`, `/gsd-execute-phase` | Phase retrospective learnings for future plans |
+| `LEARNINGS.md` | *(inline)* | `/gsd-extract-learnings`, `/gsd-execute-phase` (gated: `features.global_learnings`) | Phase retrospective learnings for future plans |
 | `THREADS.md` | *(inline)* | `/gsd:thread` | Persistent discussion threads |
-| `config.json` | `config.json` | `/gsd-new-project`, `/gsd:health --repair` | Project-specific GSD configuration |
-| `CLAUDE.md` | `claude-md.md` | `/gsd-profile` | Auto-assembled Claude Code context file |
-| `RETROSPECTIVE.md` | *(inline)* | `/gsd:complete-milestone` | Living milestone retrospective updated at each milestone close |
+| `config.json` | `config.json` | `/gsd-new-project`, `/gsd-health --repair` | Project-specific GSD configuration |
+| `CLAUDE.md` | *(inline)* | `/gsd-profile` | Auto-assembled Claude Code context file |
+| `RETROSPECTIVE.md` | *(inline)* | `/gsd-complete-milestone` | Living milestone retrospective updated at each milestone close |
+| `WINDOWS.md` | *(none)* | broken-windows ledger (`src/broken-windows.cts`) | Tracked known-broken items pending resolution (#3224) |
+| `STATE-ARCHIVE.md` | *(none)* | `state.cts`'s `cmdStatePrune` | Pruned historical STATE.md entries |
+| `milestone.lock` | *(none)* | `src/milestone-lock.cts` | Persistent milestone (phase + session) claim, unlike the transient `STATE.md.lock`/`WAITING.json` (#3311) |
+| `state.json` | *(none)* | `src/state-contract.cts` | Machine-readable state contract published at step boundaries (#3227) |
+| `skill-manifest.json` | *(none)* | `init.cts`'s `cmdSkillManifest --write` | Project-scoped skill manifest (#3964) |
+| `PATTERNS.md` | *(inline)* | `/gsd-extract-learnings` (graduation, `workflows/graduation.md`, `patterns` target) | Graduated cross-phase patterns -- distinct from the per-phase `NN-PATTERNS.md` below (#4282) |
 
 ### Version-stamped artifacts (pattern: `vX.Y-*.md`)
 
@@ -30,7 +36,7 @@ These files live directly at `.planning/` — not inside phase subdirectories.
 |---------|-------------|---------|
 | `vX.Y-MILESTONE-AUDIT.md` | `/gsd:audit-milestone` | Milestone audit report before archiving |
 
-These files are archived to `.planning/milestones/` by `/gsd:complete-milestone`. Finding them at the `.planning/` root after completion indicates the archive step was skipped.
+These files are archived to `.planning/milestones/` by `/gsd-complete-milestone`. Finding them at the `.planning/` root after completion indicates the archive step was skipped.
 
 ---
 
@@ -47,8 +53,8 @@ These files live inside a phase directory. They are NOT checked by W019 (which o
 | `NN-VALIDATION.md` | `VALIDATION.md` | `/gsd-plan-phase` (Nyquist) | Validation architecture (Nyquist method) |
 | `NN-UAT.md` | `UAT.md` | `/gsd:validate-phase` | User acceptance test results |
 | `NN-PATTERNS.md` | *(inline)* | `/gsd-plan-phase` (pattern mapper) | Analog file mapping for the phase |
-| `NN-UI-SPEC.md` | `UI-SPEC.md` | `/gsd:ui-phase` | UI design contract |
-| `NN-SECURITY.md` | `SECURITY.md` | `/gsd:secure-phase` | Security threat model |
+| `NN-UI-SPEC.md` | `UI-SPEC.md` | `/gsd-ui-phase` | UI design contract |
+| `NN-SECURITY.md` | `SECURITY.md` | `/gsd-secure-phase` | Security threat model |
 | `NN-AI-SPEC.md` | `AI-SPEC.md` | `/gsd:ai-integration-phase` | AI integration spec with eval strategy |
 | `NN-DEBUG.md` | `DEBUG.md` | `/gsd-debug` | Debug session log |
 | `NN-REVIEWS.md` | *(inline)* | `/gsd:review` | Cross-AI review feedback |
@@ -57,7 +63,7 @@ These files live inside a phase directory. They are NOT checked by W019 (which o
 
 ## Milestone Archive (`.planning/milestones/`)
 
-Files archived by `/gsd:complete-milestone`. These are never checked by W019.
+Files archived by `/gsd-complete-milestone`. These are never checked by W019.
 
 | File Pattern | Source |
 |-------------|--------|

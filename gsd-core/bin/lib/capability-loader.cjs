@@ -18,10 +18,12 @@
  *     `gsd-core-` / `anthropic-` id prefix) is rejected.
  *   - Load-time re-gate (default-resilient): an overlay that fails validation or
  *     whose `engines.gsd` does not satisfy the running GSD version is SKIPPED
- *     with a warning — it never crashes the loop. EXCEPTION (per-hook-kind
- *     policy): a skipped capability that declares a `gate` is recorded in
- *     `_overlay.incompatibleGateCapIds` so the loop resolver can fail CLOSED for
- *     that gate rather than silently proceeding as if it had passed.
+ *     with a warning — it never crashes the loop. A skipped capability that
+ *     declares a `gate` is additionally recorded in
+ *     `_overlay.incompatibleGateCapIds` / `_overlay.blockedGates` so the loop
+ *     resolver can surface a loud fail-OPEN advisory for that gate (#2009): the
+ *     un-evaluable gate is skipped (not enforced) with a remediation message,
+ *     rather than silently vanishing.
  *
  * The merged registry is materialized by the canonical `buildRegistry`
  * (re-exported from the generator, which ships) over a cap-map reconstructed
@@ -67,6 +69,8 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.readHostVersion = readHostVersion;
+exports.crossValidationSeed = crossValidationSeed;
 exports.loadRegistry = loadRegistry;
 const fs = __importStar(require("node:fs"));
 const os = __importStar(require("node:os"));
@@ -110,17 +114,33 @@ function _setValidatorForTest(v) {
 function _setGeneratorForTest(g) {
     _generatorOverride = g;
 }
-/** Resolve the running GSD version; fail-closed to '0.0.0' if it cannot be read. */
-function readHostVersion() {
+/**
+ * Resolve the running GSD version; fail-closed to '0.0.0' if it cannot be read.
+ *
+ * Prefer the authoritative `gsd-core/VERSION` the installer writes for EVERY runtime
+ * (libDir = gsd-core/bin/lib/, so `../../VERSION` = gsd-core/VERSION). This is reliable
+ * across all installed layouts — including runtimes that get no marker package.json, and
+ * local installs where the walked-up `../../../package.json` would resolve to the USER's
+ * own project and report a wrong version (#1920). Fall back to the runtime-root
+ * package.json for the dev/source tree, then fail-closed. Mirrors resolveVersionFrom()
+ * (#1383). `libDir` is injectable for tests; it defaults to this module's directory.
+ */
+function readHostVersion(libDir = __dirname) {
+    const SEMVER_PREFIX = /^\d+\.\d+\.\d+/;
     try {
-        // gsd-core/bin/lib/ -> repo/package root is three levels up.
+        const v = fs.readFileSync(path.join(libDir, '..', '..', 'VERSION'), 'utf8').trim();
+        if (SEMVER_PREFIX.test(v))
+            return v;
+    }
+    catch { /* not an installed tree (no gsd-core/VERSION) */ }
+    try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-        const pkg = require('../../../package.json');
-        return typeof pkg.version === 'string' && pkg.version ? pkg.version : '0.0.0';
+        const pkg = require(path.join(libDir, '..', '..', '..', 'package.json'));
+        if (pkg && typeof pkg.version === 'string' && SEMVER_PREFIX.test(pkg.version))
+            return pkg.version;
     }
-    catch {
-        return '0.0.0';
-    }
+    catch { /* runtime root has no package.json */ }
+    return '0.0.0';
 }
 /**
  * Canonicalize a directory path for dedup/scope-escalation comparison. #1459 finding 1 (HIGH): the dedup
@@ -347,6 +367,139 @@ function ledgerOverlayIds(ledger, rootDir) {
     catch { /* missing/invalid/non-regular/oversized ledger — no pending, no committed (fail closed) */ }
     return { pending, committed };
 }
+// ─── #3929: install-time cross-capability validation seed ──────────────────
+/** First-party capabilities from the frozen registry, keyed by id. */
+function firstPartyCaps() {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const base = require('./capability-registry.cjs');
+    return base.capabilities ?? {};
+}
+/**
+ * Central config-schema validKeys for the ownership-exclusivity check — the
+ * same source `loadRegistry`'s generator path reads, with the same
+ * missing-schema fallback (empty set). Memoized per process: the manifest is
+ * static for the lifetime of the runtime.
+ */
+let _centralKeysMemo = null;
+function centralConfigKeys() {
+    if (_centralKeysMemo === null) {
+        // Same generator seam loadRegistry uses (including the test override), so
+        // install-time and load-time central keys cannot diverge when the
+        // generator is stubbed.
+        if (_generatorOverride) {
+            _centralKeysMemo = _generatorOverride.loadCentralConfigKeys();
+        }
+        else {
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const mod = require('../../../scripts/gen-capability-registry.cjs');
+                _centralKeysMemo = mod.loadCentralConfigKeys();
+            }
+            catch {
+                _centralKeysMemo = new Set();
+            }
+        }
+    }
+    return _centralKeysMemo;
+}
+/**
+ * #3929: the validation seed `capability-source.stageValidated` runs the
+ * cross-capability suite against. Built the way `loadRegistry` builds its
+ * accepted map: first-party registry capabilities, then each COMMITTED overlay
+ * of the TARGET (global) install scope accepted INCREMENTALLY — structural
+ * validation, engines.gsd against the running host, then the FULL
+ * cross-capability suite; an overlay joins only if the suite stays clean
+ * after adding it (load's invariant: first-party alone is clean, so any new
+ * error is that overlay's fault — skip it, never fail the seed). The seed is
+ * therefore CLEAN BY CONSTRUCTION: pre-existing junk in the install scope
+ * (colliding entries, shape-invalid manifests, engines-incompatible bundles)
+ * is skipped exactly as load skips it and can never fail or skew a
+ * candidate's install decision — a repo-planted ledger cannot veto installs
+ * (#1459 CB-3).
+ *
+ * Scope: only the install TARGET scope is walked — `stageValidated` promotes
+ * into `${gsdHome}/.gsd/capabilities`, so target scope == global.
+ * Project-scope overlays are deliberately NOT seeded (they additionally
+ * require user consent to activate at load; the issue asks for overlays "in
+ * the target scope"). The candidate is added by the caller LAST, mirroring
+ * `acceptedMap.set(id, cap)`.
+ *
+ * Exported (not inlined in the installer) so the semantics this reuses —
+ * `overlayRoots`, `ledgerOverlayIds`, the shared bounded manifest reader, and
+ * the incremental-accept rules — have exactly one owner and cannot drift from
+ * the loader's load-time rules.
+ */
+function crossValidationSeed(cwd, gsdHome, hostVersion, validator, semver) {
+    const fp = firstPartyCaps();
+    const capMap = new Map(Object.entries(fp));
+    const centralKeys = centralConfigKeys();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ledger = require('./capability-ledger.cjs');
+    for (const root of overlayRoots(cwd, gsdHome)) {
+        if (root.scope !== 'global')
+            continue; // seed the TARGET scope only
+        const { committed } = ledgerOverlayIds(ledger, root.dir);
+        for (const id of committed) {
+            // First-party always wins (CONTEXT.md capability-loader entry): an
+            // overlay claiming a first-party id — or a reserved first-party prefix
+            // — is rejected at load, so it must not join the validation set.
+            if (Object.prototype.hasOwnProperty.call(fp, id))
+                continue;
+            if (RESERVED_ID_PREFIX.test(id))
+                continue;
+            let cap;
+            try {
+                const manifestPath = path.join(root.dir, id, 'capability.json');
+                const raw = ledger.readSmallRegularFile(manifestPath, MANIFEST_MAX_BYTES);
+                if (raw === null)
+                    continue; // missing/non-regular/oversized — skip fail-closed
+                cap = JSON.parse(raw);
+            }
+            catch {
+                continue; // unreadable overlay — skip (same rule as load)
+            }
+            // Same per-overlay pre-filters load applies before the cross suite:
+            // structural validity, then engines.gsd against the running host.
+            // validateCapability itself is not total over malformed array entries
+            // (#1461 finding 1) — a throw skips the overlay, as load skips it.
+            try {
+                if (validator.validateCapability(cap, id).length > 0)
+                    continue;
+            }
+            catch {
+                continue;
+            }
+            const engines = cap['engines'];
+            if (engines && typeof engines === 'object' && !Array.isArray(engines)) {
+                const range = engines['gsd'];
+                if (typeof range === 'string' && range && !semver.semverSatisfies(hostVersion, range))
+                    continue;
+            }
+            // Incremental accept: the overlay joins only if the FULL suite stays
+            // clean after adding it; any error is that overlay's fault — skip it.
+            capMap.set(id, cap);
+            let errs = [];
+            try {
+                errs = [
+                    ...validator.validateConsumesGlobal(capMap),
+                    ...validator.validateCrossCapability(capMap, centralKeys),
+                ];
+            }
+            catch {
+                // The cross validators are not total over arbitrary shapes (#1461
+                // finding 1 — e.g. the duplicate-producer invariant throws). A
+                // throwing overlay must be REMOVED here, exactly as load's
+                // acceptedMap.delete(id) does — retaining it would leave poisoning
+                // content in the seed and attribute pre-existing junk to the
+                // candidate.
+                capMap.delete(id);
+            }
+            if (errs.length > 0)
+                capMap.delete(id);
+        }
+    }
+    return { capMap, centralKeys };
+}
 /** Shallow-attach overlay diagnostics WITHOUT mutating the frozen registry module. */
 function withOverlayMeta(reg, meta) {
     return Object.assign({}, reg, { _overlay: meta });
@@ -397,12 +550,18 @@ function loadRegistry(options = {}) {
     const ledgerMod = require('./capability-ledger.cjs');
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
     const consentMod = require('./capability-consent.cjs');
+    // ADR-1239 Phase C-2 (#1681): load-time configHome confinement for installed
+    // third-party descriptors. Accessed via module ref for stub compatibility.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+    const externalDescriptorTrust = require('./external-descriptor-trust.cjs');
     const cwd = options.cwd || process.cwd();
     const hostVersion = options.hostVersion || readHostVersion();
     // The user-owned consent home — SAME `gsdHome || GSD_HOME || homedir()` rule the CLI uses, so the
     // consent the CLI records is the consent the loader checks. The consent store NEVER lives in a repo.
     const gsdHome = options.gsdHome || process.env['GSD_HOME'] || os.homedir();
     const warnings = [];
+    // ADR-2782 D4.3 — non-fatal notices for capabilities that are ACCEPTED (see OverlayMeta).
+    const diagnostics = [];
     const incompatibleGateCapIds = [];
     const blockedGates = [];
     const commandRoots = {};
@@ -681,7 +840,41 @@ function loadRegistry(options = {}) {
                     skip('cross-capability validation failed: ' + crossErrs.slice(0, 3).join('; '));
                     continue;
                 }
+                // ADR-1239 Phase C-2 (#1681): load-time configHome confinement — reject
+                // (skip + warn) any installed third-party descriptor whose declared
+                // destSubpath escapes the user-approved configHome, BEFORE it is composed.
+                // Defense-in-depth on top of the install-time gate (#1679 AC3).
+                if (typeof options.configHome === 'string' && options.configHome.length > 0) {
+                    try {
+                        externalDescriptorTrust.assertDescriptorConfined(cap, options.configHome);
+                    }
+                    catch (confineErr) {
+                        acceptedMap.delete(id);
+                        skip('configHome confinement rejected: ' + errMessage(confineErr));
+                        continue;
+                    }
+                }
                 // Accepted.
+                //
+                // ADR-2782 D4.3: an unknown field inside a `reviewer` body is IGNORED WITH A
+                // WARNING rather than failing validation, so a lane built for a newer GSD
+                // degrades to accepted-but-partially-understood instead of being rejected.
+                // That case validates cleanly, so without this call it would surface
+                // nowhere at runtime — the build-time generator only ever sees first-party
+                // in-repo manifests, never an installed third-party overlay. Guarded on
+                // presence so an older built validator without the function still loads,
+                // and wrapped because the never-crash contract (ADR-1244 D2) outranks a
+                // diagnostic: a throwing collector must not cost the user a working lane.
+                if (typeof validator.collectReviewerWarnings === 'function') {
+                    try {
+                        for (const w of validator.collectReviewerWarnings(cap) || []) {
+                            diagnostics.push(`${root.scope}:${id}: ${w}`);
+                        }
+                    }
+                    catch {
+                        // A diagnostic that cannot be produced is not worth failing an install over.
+                    }
+                }
                 overlayCaps.push(cap);
                 acceptedIds.add(id);
                 for (const s of skills)
@@ -715,7 +908,7 @@ function loadRegistry(options = {}) {
             }
         }
     }
-    const meta = { warnings, incompatibleGateCapIds, blockedGates, commandRoots };
+    const meta = { warnings, diagnostics, incompatibleGateCapIds, blockedGates, commandRoots };
     if (overlayCaps.length === 0) {
         // Nothing to compose. Return the frozen registry unchanged when there is
         // also nothing to report (identity-stable); otherwise attach diagnostics.
@@ -744,12 +937,12 @@ function loadRegistry(options = {}) {
         // to load. Clear the map (the first-party base never lists overlay commandRoots — first-party
         // command modules ship in bin/lib/, not via _overlay.commandRoots).
         meta.commandRoots = {};
-        // #1461 OVL-2 fail-CLOSED on compose failure (HIGH): the fallback DROPS every accepted overlay,
-        // so any accepted overlay that DECLARED a gate would have its gate silently vanish → a blocking
-        // gate FAILS OPEN, violating ADR-1244 (a skipped capability declaring a gate must FAIL CLOSED).
+        // #1461 OVL-2 (HIGH): on compose failure the fallback DROPS every accepted overlay, so any
+        // accepted overlay that DECLARED a gate would have its gate silently vanish with no trace.
         // Record each dropped gate-declaring overlay's gate as blocked using the SAME extraction the
-        // per-candidate `skip()` closure uses (gatePointsOf), so loop-resolver injects the synthetic
-        // blocking gate at each declared point exactly as it would for a per-candidate skip.
+        // per-candidate `skip()` closure uses (gatePointsOf), so loop-resolver surfaces the loud
+        // fail-OPEN advisory (#2009) at each declared point exactly as it would for a per-candidate
+        // skip — the gate does not silently disappear.
         for (const cap of overlayCaps) {
             const gatePoints = gatePointsOf(cap);
             if (gatePoints.length === 0)
@@ -761,4 +954,5 @@ function loadRegistry(options = {}) {
         return withOverlayMeta(base, meta);
     }
 }
-module.exports = { loadRegistry, _setValidatorForTest, _setGeneratorForTest };
+// readHostVersion is exported for the #1920 regression (VERSION-first host-version resolution).
+module.exports = { loadRegistry, readHostVersion, crossValidationSeed, _setValidatorForTest, _setGeneratorForTest };

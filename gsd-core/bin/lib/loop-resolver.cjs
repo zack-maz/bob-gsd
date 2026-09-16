@@ -40,7 +40,7 @@ const { resolveCapabilityRuntimeState } = capabilityStateModule;
 // ─── Capability-activation engine (single owner for config-key precedence) ────
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const capabilityActivationModule = require("./capability-activation.cjs");
-const { _getNestedConfigValue, _readRawConfigKey, _resolveActivationValue, resolveConfigKey } = capabilityActivationModule;
+const { _getNestedConfigValue, _readRawConfigKey, _resolveActivationValue, _resolvePointGate, resolveConfigKey } = capabilityActivationModule;
 // ─── Canonical points (derived from LOOP_HOST_CONTRACT — authoritative 12) ───
 // FIX 2: Derive the authoritative canonical set from LOOP_HOST_CONTRACT so it
 // cannot drift from the host contract. CANONICAL_POINTS_FALLBACK is kept as an
@@ -125,13 +125,15 @@ function resolveLoopHooks(input) {
     // Helper: check activation using single-key precedence resolver (FIX 1 + FIX 3)
     function isActive(hook) {
         const when = hook['when'];
-        // No `when` → unconditional hook, always active
-        if (when === undefined || when === null)
-            return true;
-        // FIX 3: `when` present but not a non-empty string → malformed registry data → INACTIVE
-        if (typeof when !== 'string' || when.length === 0)
-            return false;
-        return _resolveActivationValue(when, config, cwd, registry);
+        if (when !== undefined && when !== null) {
+            // FIX 3: `when` present but not a non-empty string → malformed registry data → INACTIVE
+            if (typeof when !== 'string' || when.length === 0)
+                return false;
+            if (!_resolveActivationValue(when, config, cwd, registry))
+                return false;
+        }
+        // #3661: optional point-selection gate — see capability-activation.cts.
+        return _resolvePointGate(hook['pointFrom'], point, config, cwd, registry);
     }
     function isCapabilityActive(capId) {
         if (!capabilityStatesById)
@@ -222,6 +224,9 @@ function resolveLoopHooks(input) {
             active.consumes = consumes;
         if (onError !== undefined)
             active.onError = onError;
+        // #4209 DISP-02: only a literal `true` projects; absent/false stay inert.
+        if (hook['supportsReviewerLanes'] === true)
+            active.supportsReviewerLanes = true;
         activeHooks.push(active);
     }
     // Process contributions
@@ -401,20 +406,48 @@ function renderLoopHooks(resolved) {
  * Missing <capId> value → coreError + non-zero exit.
  * Unknown/inactive capId → `false` (not an error).
  */
-function cmdLoopRenderHooks(cwd, point, raw, options = {}) {
-    if (!point) {
-        coreError('loop render-hooks requires a <point> argument. Valid points: ' + CANONICAL_POINTS.join(', '));
-        return;
-    }
-    // --active-cap <capId> mode: emit 'true' or 'false' only (scanner-safe, no JSON envelope)
-    const activeCapId = typeof options['activeCap'] === 'string' ? options['activeCap'] : undefined;
-    if (activeCapId !== undefined && activeCapId === '') {
-        coreError('--active-cap requires a <capId> value (e.g. --active-cap tdd)');
-        return;
-    }
+// #2009: a capability id surfaced inside the runnable `gsd capability remove <id>`
+// remediation must match the canonical kebab-case id shape (identical to
+// capability-consent.cts / capability-ledger.cts) before it is embedded — a raw
+// overlay directory name is attacker-controlled and can carry shell/markdown
+// metacharacters (backticks, ';', '|', '$()'). An id that fails this check is
+// withheld and no runnable command is rendered for it.
+const LOAD_FAIL_CAP_ID_RE = /^[a-z][a-z0-9-]*$/;
+// #2009: neutralize control chars, newlines, and backticks from a third-party
+// load-failure reason so a malicious manifest cannot break out of the warning
+// line or inject markdown / prompt content into the surfaced message.
+function sanitizeLoadFailReason(reason) {
+    const cleaned = String(reason)
+        // Strip C0 control chars, DEL, and backticks; collapse remaining whitespace.
+        .replace(/[\x00-\x1F\x7F`]/g, ' ')
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 300);
+    return cleaned || '(no reason given)';
+}
+/**
+ * The full config/registry/capability-state resolution `cmdLoopRenderHooks` performs, minus its
+ * CLI-only output formatting — extracted so an in-process caller (e.g. `review-lane dispatch-step`
+ * self-verifying a `supportsReviewerLanes` trait) can reach the SAME resolution `gsd_run loop
+ * render-hooks <point> --raw` would give it, without spawning a subprocess and re-parsing its
+ * stdout (which was subject to `io.cjs`'s `@file:` overflow protocol on the rendered-string
+ * envelope — a bug class this in-process call cannot hit, since it never touches that envelope
+ * or its rendering at all).
+ *
+ * Throws on an invalid `point` (mirrors `resolveLoopHooks`); callers convert to their own error
+ * channel. Emits the same loud stderr load-failure warnings `cmdLoopRenderHooks` always has,
+ * regardless of caller — a skipped gate must never be silently invisible.
+ */
+function resolveActiveHooksForPoint(cwd, point, options = {}) {
     const runtimeConfigDir = typeof options['configDir'] === 'string'
         ? options['configDir']
         : undefined;
+    // #2003: thread an explicit --runtime override into the capability-state
+    // resolver so the config-dir resolution bypasses the persisted-runtime
+    // fallback (GSD_RUNTIME → config.runtime). Without this, a repo with persisted
+    // runtime:"codex" resolves the config dir to ~/.codex and execute:post /
+    // verify:post hooks silently no-op when the operator drives from Claude Code.
+    const runtimeOverride = typeof options['runtime'] === 'string' ? options['runtime'] : undefined;
     // Load the config snapshot ONCE and share it with both the capability-state
     // resolver (via configOverride) and loop-hook resolution, so federated keys
     // present in loadConfig resolve identically for `active` and for hook when/
@@ -429,7 +462,7 @@ function cmdLoopRenderHooks(cwd, point, raw, options = {}) {
     catch {
         config = {};
     }
-    const state = resolveCapabilityRuntimeState(cwd, runtimeConfigDir, config);
+    const state = resolveCapabilityRuntimeState(cwd, runtimeConfigDir, config, runtimeOverride);
     // Load overlay-aware registry (ADR-1244 D2 wiring) so installed third-party
     // capabilities are visible to loop rendering exactly like first-party ones.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -441,49 +474,93 @@ function cmdLoopRenderHooks(cwd, point, raw, options = {}) {
     for (const cap of state.capabilities || []) {
         capabilityStatesById.set(cap.id, cap);
     }
-    let resolved;
+    const resolved = resolveLoopHooks({ point, registry, config, cwd, capabilityStatesById });
+    // ── ADR-1244 D2: load-failed capability gates FAIL OPEN with a loud warning ────
+    // Decision (#2009): a capability that failed to LOAD must not block the loop.
+    // The prior behavior injected a BLOCKING synthetic gate (blocking:true,
+    // onError:'halt') at every point where the skipped cap declared a gate, so a
+    // single incompatible capability halted every ship:pre / verify:post
+    // project-wide for a load error unrelated to what the gate checked — with no
+    // remediation surfaced. We now fail OPEN: no gate is injected (the loop proceeds
+    // and `--active-cap <failed-cap>` correctly reports it inactive), and a loud
+    // warning is emitted instead — to STDERR (which the operator, or the agent
+    // running the command, actually sees regardless of how the host workflow
+    // consumes stdout) AND in the envelope's `warnings` channel for structured
+    // consumers. The warning names the load reason and the exact
+    // `gsd capability remove <id>` remediation so the operator can clear the broken
+    // capability. blockedGates is still recorded by the loader; only the consequence
+    // changes from block to warn. step/contribution overlays were already skip-open.
+    //
+    // The gate injection was dropped rather than made non-blocking because no host
+    // workflow generically surfaces an arbitrary gate's message at ship:pre /
+    // verify:post (consumers dispatch on specific capIds / ref.skills), and the
+    // generic gate consumers expect an object-shaped `check`, not a prose string —
+    // so an injected advisory gate would be silently dropped or mis-dispatched. A
+    // stderr warning is the channel that is actually surfaced. (See #2009 review.)
+    const overlayMeta = registry['_overlay'];
+    const loadFailWarnings = [];
+    if (overlayMeta && Array.isArray(overlayMeta.blockedGates)) {
+        for (const blocked of overlayMeta.blockedGates) {
+            if (blocked.point !== point)
+                continue;
+            // Security (#2009 review): capId/reason come from a third-party manifest or
+            // directory name. Validate capId before embedding it in the runnable
+            // remediation command; withhold it (no runnable command) if it is not a
+            // canonical id. Strip control chars/backticks from reason.
+            const idValid = LOAD_FAIL_CAP_ID_RE.test(String(blocked.capId));
+            const capLabel = idValid
+                ? `"${blocked.capId}"`
+                : 'with an invalid id (withheld) under .gsd/capabilities/';
+            const remediation = idValid
+                ? `Run \`gsd capability remove ${blocked.capId}\` to remove it, or fix the load error.`
+                : 'Remove the offending capability directory under .gsd/capabilities/, or fix the load error.';
+            loadFailWarnings.push(`capability ${capLabel} failed to load (${sanitizeLoadFailReason(blocked.reason)}); ` +
+                `its gate at ${point} is SKIPPED and NOT enforced (failing open). ${remediation}`);
+        }
+    }
+    // Emit loudly to stderr in EVERY output mode (including --active-cap), so a
+    // skipped gate is never silently invisible to the operator/agent.
+    for (const w of loadFailWarnings) {
+        process.stderr.write(`gsd: warning — ${w}\n`);
+    }
+    // Surface capability-state warnings and the #2009 load-failure fail-open warnings together
+    // (in addition to the stderr emission above, which is the channel host workflows actually see).
+    const combinedWarnings = [...(state.warnings || []), ...loadFailWarnings];
+    return { point: resolved.point, activeHooks: resolved.activeHooks, warnings: combinedWarnings };
+}
+function cmdLoopRenderHooks(cwd, point, raw, options = {}) {
+    if (!point) {
+        coreError('loop render-hooks requires a <point> argument. Valid points: ' + CANONICAL_POINTS.join(', '));
+        return;
+    }
+    // --active-cap <capId> mode: emit 'true' or 'false' only (scanner-safe, no JSON envelope)
+    const activeCapId = typeof options['activeCap'] === 'string' ? options['activeCap'] : undefined;
+    if (activeCapId !== undefined && activeCapId === '') {
+        coreError('--active-cap requires a <capId> value (e.g. --active-cap tdd)');
+        return;
+    }
+    let result;
     try {
-        resolved = resolveLoopHooks({ point, registry, config, cwd, capabilityStatesById });
+        result = resolveActiveHooksForPoint(cwd, point, options);
     }
     catch (err) {
         const msg = (err instanceof Error) ? err.message : String(err);
         coreError(msg);
         return;
     }
-    // ── ADR-1244 D2 fail-closed gate injection ────────────────────────────────────
-    // For every skipped overlay capability that declared a gate at this point,
-    // inject a synthetic BLOCKING gate into the resolved output so the loop HALTS
-    // rather than silently proceeding as if the gate had passed. step/contribution
-    // overlays that were skipped are left open (skip-open is correct for them).
-    const overlayMeta = registry['_overlay'];
-    if (overlayMeta && Array.isArray(overlayMeta.blockedGates)) {
-        for (const blocked of overlayMeta.blockedGates) {
-            if (blocked.point === point) {
-                const syntheticGate = {
-                    capId: blocked.capId,
-                    kind: 'gate',
-                    blocking: true,
-                    onError: 'halt',
-                    check: `capability "${blocked.capId}" was skipped at load (${blocked.reason}); its gate at ${point} cannot be evaluated — failing closed`,
-                };
-                resolved.activeHooks.push(syntheticGate);
-            }
-        }
-    }
-    // --active-cap mode: print exactly 'true' or 'false' with no envelope
     if (activeCapId !== undefined) {
-        const isActive = resolved.activeHooks.some((h) => h.capId === activeCapId);
+        const isActive = result.activeHooks.some((h) => h.capId === activeCapId);
         process.stdout.write(isActive ? 'true\n' : 'false\n');
         return;
     }
-    const rendered = renderLoopHooks(resolved);
+    const rendered = renderLoopHooks({ point: result.point, activeHooks: result.activeHooks });
     const envelope = {
-        point: resolved.point,
-        activeHooks: resolved.activeHooks,
+        point: result.point,
+        activeHooks: result.activeHooks,
         rendered,
     };
-    if (state.warnings && state.warnings.length > 0) {
-        envelope.warnings = state.warnings;
+    if (result.warnings.length > 0) {
+        envelope.warnings = result.warnings;
     }
     coreOutput(envelope, raw);
 }
@@ -491,6 +568,7 @@ module.exports = {
     resolveLoopHooks,
     renderLoopHooks,
     cmdLoopRenderHooks,
+    resolveActiveHooksForPoint,
     // Exported for tests
     _getNestedConfigValue,
     _resolveActivationValue,
@@ -498,6 +576,10 @@ module.exports = {
     // Re-exported for identity parity guard (FIX 2: resolveConfigValues in this module
     // calls resolveConfigKey; exporting it here makes the single-owner contract testable).
     resolveConfigKey,
+    // #3661: re-exported for the same identity parity guard — isActive calls
+    // _resolvePointGate; exporting it here makes the single-owner contract testable
+    // (see tests/capability-precedence-parity.test.cjs's identity guard describe block).
+    _resolvePointGate,
     CANONICAL_POINTS_FALLBACK,
     CANONICAL_POINTS,
 };

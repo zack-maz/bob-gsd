@@ -79,12 +79,12 @@ Some kept candidates are not bespoke at all — they are **canon** security/comp
 constraints that a dedicated tool already owns. Do NOT mint a prohibition for them. Instead
 emit a one-line breadcrumb and stop:
 
-- OWASP / prototype-pollution / path-traversal / injection → breadcrumb to `/gsd:secure-phase`
+- OWASP / prototype-pollution / path-traversal / injection → breadcrumb to `/gsd-secure-phase`
   and `eslint` (security plugins), not a minted prohibition.
-- GDPR / data-retention / consent → breadcrumb to `/gsd:secure-phase`.
-- Generic fairness/bias canon → breadcrumb to `/gsd:secure-phase`.
+- GDPR / data-retention / consent → breadcrumb to `/gsd-secure-phase`.
+- Generic fairness/bias canon → breadcrumb to `/gsd-secure-phase`.
 
-The breadcrumb reads like: *"prototype-pollution is canon — covered by /gsd:secure-phase +
+The breadcrumb reads like: *"prototype-pollution is canon — covered by /gsd-secure-phase +
 eslint; not minted here."* This keeps the surfaced list to the ~2–3 **bespoke** items that
 no other tool would catch — the manipulative-framing prohibition, the product-specific
 fairness constraint — which is the whole value of the probe. Minting canon items both
