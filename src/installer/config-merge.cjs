@@ -22,17 +22,19 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /**
- * Bob's runtime context window, in tokens.
+ * Bob's runtime context window, in tokens — the CONSERVATIVE end of the range
+ * Bob documents.
  *
- * Bob spawns subagents sparingly and its guidance is "default: do the work
- * yourself", so the GSD loop shares ONE context window in the common case even
- * though parallel fan-out IS available (BOB2-05). Bob's real 270k is therefore
- * the operative token budget. gsd-core keys its
- * read-depth / advisory scaling on this top-level `context_window` integer
- * (defaulting to a conservative 200000 when absent), so the adapter seeds Bob's
- * true window to make gsd-core's budget math match reality.
+ * Bob's own 2.0.0 release notes give the window as "200,000 to 270,000 tokens"
+ * (which end applies depends on the backend Bob routes the session to, and Bob
+ * owns that routing — gsd-bob cannot know it at install time). gsd-core keys
+ * its read-depth / advisory scaling on this top-level `context_window` integer,
+ * so the adapter seeds the FLOOR: a budget that is correct on every backend
+ * rather than one that overflows on the smaller ones. (v0.2.x–v0.3.0 seeded the
+ * 270k ceiling; that was the optimistic end of the same range.) The GSD loop
+ * shares ONE window in the common case, so this is the operative budget.
  */
-const BOB_CONTEXT_WINDOW = 270000;
+const BOB_CONTEXT_WINDOW = 200000;
 
 /**
  * The config keys this adapter OWNS in `.planning/config.json` — seeded by
@@ -48,11 +50,18 @@ const BOB_CONTEXT_WINDOW = 270000;
  *                           sequentially in the main checkout, which is exactly
  *                           how they ran under 1.6.1 (the gate is new, the
  *                           behaviour is not).
- *   context_window          Bob's real 270k runtime window (see above).
+ *   context_window          the floor of Bob's documented 200k–270k window (see above).
+ *   resolve_model_ids       "omit" — Bob owns model routing (RUNTIME-04). gsd-core's
+ *                           own installer writes this for every non-reference
+ *                           runtime; with it, workflow dispatches carry NO model
+ *                           parameter (a tier alias would 404 on a host without
+ *                           native tier names) and no flow asks the user to pick
+ *                           a model. This is the config half of NEUTRAL-04.
  */
 const BOB_OWNED_CONFIG = Object.freeze({
   workflow: Object.freeze({ text_mode: true, use_worktrees: false }),
   context_window: BOB_CONTEXT_WINDOW,
+  resolve_model_ids: 'omit',
 });
 
 /**
@@ -62,7 +71,7 @@ const BOB_OWNED_CONFIG = Object.freeze({
  * Behavior:
  *   - missing config.json            → create
  *                                      `{ workflow: { text_mode: true, use_worktrees: false },
- *                                         context_window: 270000 }`
+ *                                         context_window: 200000, resolve_model_ids: "omit" }`
  *   - existing config with user keys → preserve them, set the BOB_OWNED_CONFIG keys
  *   - non-object workflow value      → coerce to a fresh object, then set the key
  *   - re-run                         → byte-identical (idempotent)
@@ -118,11 +127,11 @@ function mergeTextMode(workspaceRoot, { dryRun = false } = {}) {
     cfg.workflow[key] = value;
   }
 
-  // Seed Bob's real context window unconditionally — it is a runtime constant the
-  // adapter owns (exactly like text_mode). The GSD loop shares one window in the
-  // common case, so gsd-core's read-depth/advisory scaling must key on Bob's
-  // true 270k rather than the conservative 200k default.
+  // Seed Bob's context-window floor unconditionally — it is a runtime constant
+  // the adapter owns (exactly like text_mode) and pins gsd-core's read-depth /
+  // advisory scaling to a budget that holds on every backend Bob routes to.
   cfg.context_window = BOB_OWNED_CONFIG.context_window;
+  cfg.resolve_model_ids = BOB_OWNED_CONFIG.resolve_model_ids;
 
   // Byte-stable serialization so the manifest hash is reproducible across runs.
   const bytes = JSON.stringify(cfg, null, 2) + '\n';
@@ -152,6 +161,7 @@ function unmergeOwnedKeys(cfg) {
     if (Object.keys(cfg.workflow).length === 0) delete cfg.workflow;
   }
   delete cfg.context_window;
+  delete cfg.resolve_model_ids;
   return cfg;
 }
 

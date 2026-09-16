@@ -4,7 +4,7 @@
  * global-scope-paths.test.cjs — the global-scope path-absolutization contract
  * (Phase 13).
  *
- * The converters map the Claude config home to a WORKSPACE-RELATIVE `.bob/` form
+ * The converters map the upstream config home to a WORKSPACE-RELATIVE `.bob/` form
  * for a local install and to the tilde form `~/.bob/` for a global one. Bob's file
  * tools take paths LITERALLY — no `~` expansion is documented anywhere in the Bob
  * docs — and a workspace-relative `.bob/gsd-core/...` simply does not exist under

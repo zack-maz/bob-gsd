@@ -31,7 +31,8 @@ const {
   modesRelPathForScope,
   gateArtifact,
   buildSupportRoster,
-  neutralizeModelReferences,
+  bobifyRuntimeDoc,
+  bobifyRuntimeShell,
 } = require('../bob-adapter.cjs');
 const { sha256, safeJoin, classifyOnUpdate, classifyOrphan } = require('./manifest.cjs');
 
@@ -220,6 +221,10 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
   // `.bob/...` relative path does not exist under `~/.bob`).
   const isGlobal = scope === 'global';
   const gsdCoreDir = isGlobal ? path.join(target, 'gsd-core') : path.join('.bob', 'gsd-core');
+  // Where the Bob home is, from the model's point of view when it reads an
+  // emitted artifact: workspace-relative `.bob` for a local install, the
+  // absolute target for a global one. Drives every path rewrite below.
+  const loc = { gsdCoreDir, bobHome: isGlobal ? target : '.bob' };
   const mergedModes = mergeCustomModes(existingModes, emitGsdMode({ gsdCoreDir }));
   const mergedBytes = Buffer.from(mergedModes);
   emittedThisRun.add(modesRel);
@@ -242,10 +247,27 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
   // Source is repoRoot, never cwd/workspaceRoot. Copy recursively, then track
   // each copied file through the collision policy so user-edited payload files
   // are skipped, not clobbered.
+  // NEUTRAL-04 + the host-path fix: every markdown the model READS at runtime
+  // (the doc tree — workflows, references, templates, contexts) is Bob-ified at
+  // copy time: upstream config-home paths are rewritten to THIS install's
+  // location (scope-dependent — see `loc` above), the 19-runtime resolver
+  // preamble becomes the Bob-only one, and agent/vendor/model names in prose
+  // are neutralized. `bin/` is code and is copied verbatim.
+  const RUNTIME_DOC_DIRS = new Set(['workflows', 'references', 'templates', 'contexts']);
   const payloadFiles = listFilesRel(payloadSrc); // relative to payloadSrc
   for (const rel of payloadFiles) {
     const destRel = path.join('gsd-core', rel);
-    const bytes = fs.readFileSync(path.join(payloadSrc, rel));
+    const topDir = rel.split(path.sep)[0];
+    const isRuntimeDoc = RUNTIME_DOC_DIRS.has(topDir) && rel.endsWith('.md');
+    const isRuntimeShell = RUNTIME_DOC_DIRS.has(topDir) && rel.endsWith('.sh');
+    let bytes;
+    if (isRuntimeDoc) {
+      bytes = Buffer.from(bobifyRuntimeDoc(fs.readFileSync(path.join(payloadSrc, rel), 'utf8'), loc));
+    } else if (isRuntimeShell) {
+      bytes = Buffer.from(bobifyRuntimeShell(fs.readFileSync(path.join(payloadSrc, rel), 'utf8'), loc));
+    } else {
+      bytes = fs.readFileSync(path.join(payloadSrc, rel));
+    }
     stageFile(destRel, bytes);
   }
 
@@ -273,7 +295,7 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
   stageFile('SUPPORT-ROSTER.md', Buffer.from(renderRoster(rosterCandidates(repoRoot))));
 
   // ---- Convertible-artifact loop (D-08, roster-agnostic) -------------------
-  // Each Claude command source under repoRoot/commands/gsd/ is run through the
+  // Each upstream command source under repoRoot/commands/gsd/ is run through the
   // bob artifactLayout converters (D-01 port-by-conversion — reuse the built
   // converters, never raw-copy and never hand-rewrite). For a supported source
   // `<stem>` we emit TWO Bob-conformant artifacts, matching the bob
@@ -291,14 +313,20 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
     const {
       convertClaudeCommandToBobCommand,
       convertClaudeCommandToBobSkill,
+      filterRuntimeNotesForTarget,
     } = require(path.join(repoRoot, 'gsd-core', 'bin', 'lib', 'runtime-artifact-conversion.cjs'));
-    // Scope-aware emission: the converters map the Claude config home to `.bob/`
+    // Scope-aware emission: the converters map the upstream config home to `.bob/`
     // (workspace-relative) for a LOCAL install and to `~/.bob/` for a GLOBAL one;
     // the global form is then rewritten to the ABSOLUTE install target, because
     // Bob's file tools take paths literally (no `~` expansion is documented) and a
     // workspace-relative `.bob/gsd-core/...` does not exist under `~/.bob`.
-    const finish = (converted) => neutralizeModelReferences(
-      isGlobal ? absolutizeGlobalHome(converted, target) : converted,
+    // Then the same Bob-ification the doc tree gets (NEUTRAL-04): upstream's own
+    // `filterRuntimeNotesForTarget` drops notes addressed to other hosts, and
+    // bobifyRuntimeDoc rewrites residual host paths + neutralizes agent, vendor
+    // and model names (it subsumes the older model-tier pass).
+    const finish = (converted) => bobifyRuntimeDoc(
+      filterRuntimeNotesForTarget(isGlobal ? absolutizeGlobalHome(converted, target) : converted, 'bob'),
+      loc,
     );
     for (const rel of listFilesRel(convertibleSrc)) {
       const stem = path.basename(rel, path.extname(rel));

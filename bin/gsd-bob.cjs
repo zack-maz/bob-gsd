@@ -14,10 +14,10 @@
  *   report.cjs      written/skipped/removed end-of-run buckets
  *   bob-adapter.cjs unmergeCustomModes (uninstall un-merge — YAML stays in the adapter)
  *
- * Dependency discipline (CLAUDE.md "What NOT to Use"): node builtins +
+ * Dependency discipline (the project instruction file, "What NOT to Use"): node builtins +
  * src/installer/* + src/bob-adapter.cjs ONLY. No YAML parser in this file (the
  * uninstall un-merge routes through bob-adapter.unmergeCustomModes), no
- * third-party arg-parsing framework, no Claude agent SDK.
+ * third-party arg-parsing framework, no model-vendor agent SDK.
  *
  * TWO distinct roots, NEVER conflated (T-03-09b / T-03-14c):
  *   repoRoot       = path.resolve(__dirname, '..') — the gsd-bob PACKAGE root that

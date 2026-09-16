@@ -47,7 +47,7 @@ test('a skill with no source frontmatter still yields well-formed output (no cra
   assert.ok(out.includes('Just a body'));
 });
 
-// TRANS-01/02 (WR-03): the emitted body must carry ZERO Claude config-home path
+// TRANS-01/02 (WR-03): the emitted body must carry ZERO upstream config-home path
 // refs and ZERO colon-dialect command refs — every one is neutralized to the .bob
 // home / hyphen form. Forbidden tokens are built programmatically so this test
 // file's own prose can never self-trip the negative assertions.

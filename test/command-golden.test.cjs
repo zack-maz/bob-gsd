@@ -48,7 +48,7 @@ test('a command with no source frontmatter still yields well-formed output (no c
   assert.ok(out.includes('Bare command'));
 });
 
-// TRANS-01/02 (WR-03): the emitted command body must carry ZERO Claude config-home
+// TRANS-01/02 (WR-03): the emitted command body must carry ZERO upstream config-home
 // path refs and ZERO colon-dialect command refs. Forbidden tokens are built
 // programmatically so this test file's prose cannot self-trip the assertions.
 test('command body is neutralized: no .claude / no colon-dialect; has .bob / hyphen form', () => {

@@ -56,9 +56,9 @@ function fixtureRepoRoot() {
 }
 
 /**
- * Seed a `commands/gsd/<stem>.md` Claude source under an existing fixture
+ * Seed a `commands/gsd/<stem>.md` upstream source under an existing fixture
  * repoRoot so the convertible loop has input to convert. Mirrors the canonical
- * Claude-command shape (frontmatter with unsupported keys + body refs to be
+ * upstream-command shape (frontmatter with unsupported keys + body refs to be
  * neutralized). Returns the raw source content.
  */
 function seedConvertibleSource(repoRoot, stem) {
@@ -79,7 +79,7 @@ function seedConvertibleSource(repoRoot, stem) {
 
   const dir = path.join(repoRoot, 'commands', 'gsd');
   fs.mkdirSync(dir, { recursive: true });
-  // Forbidden tokens (Claude config-home + colon dialect) built programmatically
+  // Forbidden tokens (upstream config-home + colon dialect) built programmatically
   // so this test file's prose cannot self-trip the neutralization assertions.
   const claudeHome = ['.', 'claude'].join('');
   const colonDialect = ['gsd', ':'].join('');

@@ -6,7 +6,7 @@
  *
  * Every test requires the extended registry/descriptor modules through this
  * helper so they exercise the project's vendored copy (which carries the `bob`
- * runtime entry), never the global `~/.claude/gsd-core` install.
+ * runtime entry), never a global install under the upstream dot-home.
  *
  *   const { vendorLib, requireVendor } = require('../_helpers/vendor.cjs');
  *   const { resolveConfigHomeFromDescriptor } = requireVendor('runtime-homes.cjs');

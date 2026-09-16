@@ -10,7 +10,7 @@
  * command — per the 05-01 scope correction; it is exercised by the contract
  * suite's wholesale-workflow assertion, not here.)
  *
- * Proves the four vendored Claude command sources convert deterministically into
+ * Proves the four vendored upstream command sources convert deterministically into
  * Bob-conformant artifacts:
  *   - per-stem golden diff (×4): convertClaudeCommandToBobCommand / ...Skill are
  *     byte-identical to frozen fixtures under test/fixtures/quality-gates/.
@@ -19,7 +19,7 @@
  *     declared one, and strips effort/allowed-tools/agent; the skill side carries
  *     name + non-empty description ONLY (argument-hint is not a Bob skill key).
  *     Bob silently ignores a description-less skill (RESEARCH Pitfall 2/4).
- *   - neutralization (×4): each converted body carries no Claude config-home PATH
+ *   - neutralization (×4): each converted body carries no upstream config-home PATH
  *     ref and no colon-dialect command ref; carries the .bob home + hyphen form.
  *     Forbidden tokens are built PROGRAMMATICALLY so this file's prose cannot
  *     self-trip the assertions.
@@ -46,7 +46,7 @@ const fixDir = path.join(repoRoot, 'test', 'fixtures', 'quality-gates');
 // Forbidden / required tokens built PROGRAMMATICALLY (mirrors
 // core-loop-equivalence.test.cjs L52-60) so the test prose itself never contains
 // the literal tokens it forbids. The config-home leak target is the PATH form
-// (`.claude/`), NOT the bare substring `.claude`.
+// (the upstream dot-home with a trailing slash), NOT the bare dot-home substring.
 const claudeHomePath = ['.', 'claude', '/'].join('');
 const colonDialect = ['gsd', ':'].join('');
 const bobHome = ['.', 'bob'].join('');

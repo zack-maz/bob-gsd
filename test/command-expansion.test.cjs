@@ -19,7 +19,7 @@
  *       Bob-conformant command (non-empty description; argument-hint IFF the
  *       source declared one; effort/allowed-tools/agent/type/requires stripped)
  *       and skill (name + non-empty description only, no argument-hint); neither
- *       body carries a Claude config-home path form or the colon command dialect;
+ *       body carries an upstream config-home path form or the colon command dialect;
  *       the conversion carries the .bob home + hyphen form.
  *   B — neutrality (per stem, all 31): scanModelLiterals over each EMITTED
  *       (neutralizeModelReferences post-pass, as stage.cjs applies) command and
@@ -61,7 +61,7 @@ const stems = fs
 // Forbidden / required tokens built PROGRAMMATICALLY (mirrors
 // quality-gate-equivalence.test.cjs:49-53) so this file's prose never contains
 // the literal tokens it forbids. The config-home leak target is the PATH form
-// (`.claude/`), NOT the bare substring `.claude`.
+// (the upstream dot-home with a trailing slash), NOT the bare dot-home substring.
 const claudeHomePath = ['.', 'claude', '/'].join('');
 const colonDialect = ['gsd', ':'].join('');
 const bobHome = ['.', 'bob'].join('');

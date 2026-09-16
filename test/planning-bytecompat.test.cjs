@@ -4,10 +4,10 @@
  * planning-bytecompat.test.cjs — RUNTIME-03.
  *
  * Proves a `.planning/` artifact produced under a BOB runtime config is
- * byte-identical to the same artifact produced under a CLAUDE runtime config.
+ * byte-identical to the same artifact produced under the REFERENCE runtime config.
  *
  * PRIMARY (hermetic golden diff): construct two runtime-config contexts (bob
- * descriptor resolved vs claude descriptor resolved), drive the SAME
+ * descriptor resolved vs the reference descriptor resolved), drive the SAME
  * runtime-agnostic `.planning/` write path under each — gsd-core's
  * state-document writer (`stateReplaceField`/`stateReplaceFieldIfTemplate`),
  * the exact code path `gsd-tools query state.*` uses to mutate
@@ -19,7 +19,7 @@
  *
  * STRUCTURAL INVARIANT (secondary, always asserted): the bob runtime declares
  * no `.planning/` artifactLayout target — converters/layout never enumerate
- * `.planning/`, so the write path is shared with claude by construction.
+ * `.planning/`, so the write path is shared with the reference runtime by construction.
  */
 
 const test = require('node:test');
@@ -87,7 +87,7 @@ test('RUNTIME-03 structural invariant: bob declares no .planning/ artifactLayout
       `bob artifactLayout target "${t.destSubpath}" must not enumerate .planning/`,
     );
   }
-  // bob's only targets are skills + commands (NOT .planning) — same shape as claude.
+  // bob's only targets are skills + commands (NOT .planning) — same shape as the reference.
   const kinds = allTargets.map((t) => t.kind).sort();
   assert.deepEqual([...new Set(kinds)].sort(), ['commands', 'skills']);
 });

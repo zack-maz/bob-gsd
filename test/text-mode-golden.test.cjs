@@ -9,7 +9,7 @@ const { repoRoot, vendorLib, requireVendor } = require('./_helpers/vendor.cjs');
 
 // TRANS-03 (golden, by REUSE): with workflow.text_mode forced true for the bob
 // runtime, gsd-core's EXISTING config+workflow seam degrades AskUserQuestion to a
-// numbered text list and captures a validated typed answer in the Claude runtime —
+// numbered text list and captures a validated typed answer on the reference runtime —
 // NO converter rewriting. We assert three things:
 //   1. The seam carries the bob default: the fixture's workflow.text_mode:true
 //      projects to text_mode === true in the resolved config (the value the

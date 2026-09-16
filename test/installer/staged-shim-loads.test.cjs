@@ -24,7 +24,7 @@
  *     must be ABSENT from the staged tree and from the manifest — staging it back
  *     would reintroduce a second, drift-prone version of record.
  *   - `gsd-core/.gsd-runtime` (contents `bob`) now ships in the payload. Without it
- *     every `dispatch-*` query answers for the `claude` descriptor.
+ *     every `dispatch-*` query answers for the reference runtime's descriptor.
  *   - the staged tree is version-of-record: `gsd-core/VERSION` must read 1.14.0 and
  *     the shim's own `runtime-identity --raw` must agree with it.
  *   - `query dispatch-isolation` is the gate /gsd-execute-phase reads in 1.14.0, so

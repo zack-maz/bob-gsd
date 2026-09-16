@@ -35,7 +35,7 @@
  *      Bob probe, and NONE still carries the upstream install hint.
  *   7. verifyAll() and preflight() both run clean against the committed tree,
  *      and patchResolverContent is idempotent AND orders the Bob probes FIRST
- *      (local `.bob` before `.claude`; global `$HOME/.bob` before the
+ *      (local `.bob` before the upstream dot-home; global `$HOME/.bob` before the
  *      CLAUDE_CONFIG_DIR form) on a sample preamble built in the test.
  *
  * Hermetic: reads only the committed tree through requireVendor / repoRoot; no
@@ -201,7 +201,7 @@ test('drift: patchResolverContent inserts the Bob probes FIRST and is idempotent
   assert.equal(patchResolverContent(once), once, 'a second pass is a no-op (idempotent)');
 
   const lines = once.split('\n');
-  // Local probe line: the workspace-relative .bob form precedes the .claude one.
+  // Local probe line: the workspace-relative .bob form precedes the upstream one.
   const localLine = lines.find((l) => l.includes(`${root}/${bobDot}/`));
   assert.ok(localLine, 'the local probe line gained a .bob candidate');
   assert.ok(

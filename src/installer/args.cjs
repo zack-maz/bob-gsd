@@ -8,7 +8,7 @@
  * rejected with a concrete error. There is deliberately NO `--clean` or
  * `--update` flag — re-running install IS the update; `--uninstall` + install
  * IS the clean. Recognizing those flags would diverge from gsd-core and break
- * UX parity (CLAUDE.md §"What NOT to Use").
+ * UX parity (the project instruction file §"What NOT to Use").
  *
  * Recognized flags:
  *   --bob                 runtime selector (accepted for UX parity, no effect here)

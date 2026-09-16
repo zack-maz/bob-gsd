@@ -102,7 +102,7 @@ function readCmdNames() {
     // not silently handed an empty registry while the real problem goes undetected.
     if (err.code !== 'ENOENT') throw err;
     // COMMANDS_DIR may not exist on installs that use skill-based runtimes or
-    // global Claude installs (no local commands/gsd/ directory). Return [] so
+    // global installs on any host (no local commands/gsd/ directory). Return [] so
     // callers that handle an empty array gracefully (buildPattern returns null,
     // transformContent is a no-op) are not broken by a missing directory.
     return [];

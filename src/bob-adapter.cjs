@@ -493,7 +493,219 @@ function buildSupportRoster(candidates, capabilityDecl) {
   return lines;
 }
 
+// ---------------------------------------------------------------------------
+// NEUTRAL-04 — runtime-doc Bob-ification (agent/product-name neutralization +
+// host-path rewrite) applied at STAGE time to every markdown the model reads
+// under Bob: the converted commands/skills AND the vendored gsd-core doc tree
+// (workflows, references, templates, contexts).
+//
+// Why at stage time and not in the vendored tree: the correct replacement for
+// the upstream config-home path differs by install scope (workspace-relative
+// `.bob/gsd-core/...` for a local install, the absolute target for a global
+// one), so the payload copy is the only place that knows the answer. Keeping
+// the vendored tree upstream-shaped also keeps the re-vendor replay small.
+//
+// Every brand table below is base64-decoded at load so this backend-neutral
+// module never carries a bare agent/vendor/model literal (RUNTIME-04, the same
+// discipline as MODEL_TIER_TOKENS).
+// ---------------------------------------------------------------------------
+
+const decodeList = (b64) => JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
+const decodeStr = (b64) => Buffer.from(b64, 'base64').toString('utf8');
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Other coding-agent runtimes / products (longest first so compounds win). */
+const OTHER_RUNTIME_NAMES = decodeList(
+  'WyJDbGF1ZGUgQ29kZSIsIkNsYXVkZSBBcHAiLCJDbGF1ZGUiLCJDb2RleCIsIkdlbWluaSIsIkN1cnNvciIsIkNvcGlsb3QiLCJPcGVuQ29kZSIsIkNsaW5lIiwiS2lsbyIsIldpbmRzdXJmIiwiQXVnbWVudCIsIlRyYWUiLCJRd2VuIiwiSGVybWVzIiwiS2ltaSBDb2RlIiwiS2ltaSIsIkNvZGVCdWRkeSIsIkFudGlncmF2aXR5IiwiWkNvZGUiXQ==',
+);
+/** Model vendors. */
+const MODEL_VENDOR_NAMES = decodeList('WyJBbnRocm9waWMiLCJPcGVuQUkiXQ==');
+/** Model families / local model servers (not covered by the tier tokens). */
+const MODEL_PRODUCT_NAMES = decodeList('WyJHUFQiLCJPbGxhbWEiLCJsbGFtYS5jcHAiLCJsbGFtYSIsIk1pc3RyYWwiLCJHcmFuaXRlIl0=');
+/** The upstream host's names: its project-instruction file, home dir, home env var. */
+const UPSTREAM_INSTRUCTION_FILE = decodeStr('Q0xBVURFLm1k'); // → AGENTS.md on Bob
+const UPSTREAM_HOME_DIRNAME = decodeStr('LmNsYXVkZQ=='); // the dot-home the payload references
+const UPSTREAM_HOME_ENV = decodeStr('Q0xBVURFX0NPTkZJR19ESVI='); // `${<ENV>:-$HOME/<dot-home>}` form
+/** The first token of the upstream reference runtime's name (the bare-word case). */
+const UPSTREAM_RUNTIME_WORD = OTHER_RUNTIME_NAMES[2];
+
+/** Bob's project-instruction file, as gsd-core's own `getProjectInstructionFile('bob')` resolves it. */
+const BOB_INSTRUCTION_FILE = 'AGENTS.md';
+
+/**
+ * The Bob-only `gsd_run` resolver preamble that replaces upstream's 19-home
+ * probe (which names every other runtime's config home). Probes, in order:
+ * the install this artifact was staged from, the workspace-local `.bob`, then
+ * the global `~/.bob`; falls back to a `gsd_run` already on PATH. Keeps the
+ * package-identity check. Emitted as ONE line, exactly like upstream's.
+ * @param {string} gsdCoreDir  where THIS install put gsd-core (see stage.cjs)
+ */
+function bobResolverPreamble(gsdCoreDir) {
+  const shim = '${_GSD_SHIM_NAME}';
+  const root = '${_GSD_RUNTIME_ROOT}';
+  return (
+    `_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="\${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; ` +
+    `_gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; ` +
+    `if _gsd_at "${gsdCoreDir}/bin/${shim}" "${root}/.bob/gsd-core/bin/${shim}" "$HOME/.bob/gsd-core/bin/${shim}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; ` +
+    `elif unset -f gsd_run; _G="$(command -v gsd_run)"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; ` +
+    `else echo "ERROR: gsd-tools.cjs not found under ${gsdCoreDir}, ${root}/.bob/gsd-core or $HOME/.bob/gsd-core, and gsd_run is not on PATH. Run: npx -y --package=@zack-maz/gsd-bob@latest -- gsd-bob --bob --local" >&2; exit 1; fi; ` +
+    `GSD_IDENTITY_STATUS=unverified; case "$(gsd_run runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@opengsd/gsd-core"'*'}') GSD_IDENTITY_STATUS=ok;; esac; export GSD_IDENTITY_STATUS; ` +
+    `[ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \\"$GSD_TOOLS\\" did not prove it is @opengsd/gsd-core - it is either a different package or an older release without the runtime-identity verb." >&2`
+  );
+}
+
+/** Match the whole upstream resolver preamble line (it is always emitted as one line). */
+const RESOLVER_LINE_RE = /^[ \t]*_GSD_SHIM_NAME="gsd-tools\.cjs";.*$/gm;
+
+/**
+ * Case-shape-preserving replacement: an ALL-CAPS match (a heading / rule label)
+ * → upper-case phrase, anything else → the lower-case phrase. Proper nouns are
+ * always capitalized, so their case carries no sentence-position signal; a
+ * lower-case common-noun phrase reads correctly mid-sentence, which is where
+ * nearly every mention sits.
+ */
+function shapedReplacement(match, lower) {
+  if (match === match.toUpperCase() && /[A-Z]/.test(match)) return lower.toUpperCase();
+  return lower;
+}
+
+/**
+ * Rewrite the upstream host paths in a runtime doc to this install's Bob paths.
+ * Applied to prose AND code (paths inside bash blocks are the load-bearing
+ * case: the workflows `@`-read and `cat` sibling files by these paths).
+ * @param {string} content
+ * @param {{gsdCoreDir:string, bobHome:string}} loc
+ */
+function rewriteUpstreamHostPaths(content, { gsdCoreDir, bobHome }) {
+  const home = escapeRe(UPSTREAM_HOME_DIRNAME);
+  const envForm = new RegExp(`\\$\\{${UPSTREAM_HOME_ENV}:-\\$HOME/${home}\\}`, 'g');
+  return content
+    // `${<ENV>:-$HOME/<dot-home>}/gsd-core/...` and the bare env form
+    .replace(new RegExp(`\\$\\{${UPSTREAM_HOME_ENV}:-\\$HOME/${home}\\}/gsd-core/`, 'g'), `${gsdCoreDir}/`)
+    .replace(envForm, bobHome)
+    // `$HOME/<dot-home>/gsd-core/` and `~/<dot-home>/gsd-core/` → this install's gsd-core
+    .replace(new RegExp(`(?:\\$HOME|~)/${home}/gsd-core/`, 'g'), `${gsdCoreDir}/`)
+    .replace(new RegExp(`(?:\\$HOME|~)/${home}/gsd-core\\b`, 'g'), gsdCoreDir)
+    // any other `$HOME/<dot-home>/…` → the Bob home
+    .replace(new RegExp(`(?:\\$HOME|~)/${home}/`, 'g'), `${bobHome}/`)
+    .replace(new RegExp(`(?:\\$HOME|~)/${home}\\b`, 'g'), bobHome)
+    // workspace-relative `./<dot-home>/`, `<dot-home>/`, and `<any-root>/<dot-home>/`
+    // (e.g. `${PROJECT_ROOT}/<dot-home>/skills/` → Bob's real project skills dir) → `.bob/`
+    .replace(new RegExp(`\\./${home}/`, 'g'), './.bob/')
+    .replace(new RegExp(`(^|[^\\w.])${home}/`, 'gm'), '$1.bob/')
+    // the upstream project-instruction file → Bob's
+    .replace(new RegExp(`\\b${escapeRe(UPSTREAM_INSTRUCTION_FILE)}\\b`, 'g'), BOB_INSTRUCTION_FILE)
+    // any residual bare reference to the upstream home env var → Bob's name for it.
+    // Bob defines no such variable, so `[ -n "$BOB_CONFIG_DIR" ]` guards stay false
+    // exactly as they did — the dead branch keeps its semantics and loses the name.
+    .replace(new RegExp(`\\b${UPSTREAM_HOME_ENV}\\b`, 'g'), 'BOB_CONFIG_DIR');
+}
+
+/**
+ * Neutralize agent/product/vendor/model names in PROSE. Ordered so compounds
+ * (`<name> Code`, `<name> RUNTIME`) resolve before bare words. The reference
+ * runtime's own name becomes `Bob` (the text is now addressed to Bob); every
+ * OTHER runtime becomes `another runtime` (the sentence was describing a host
+ * that is not this one); vendors/models become neutral phrases; the model-tier
+ * pass (neutralizeModelReferences) runs last.
+ * @param {string} prose
+ */
+function neutralizeAgentNamesInProse(prose) {
+  let c = prose;
+  // A multi-word product name also appears joined by `-` or `_` (a runtime id,
+  // a package name, a slug); match all three joiners so `<name>-code` never
+  // degrades to `another runtime-code`.
+  const nameRe = (n) => escapeRe(n).replace(/ /g, '[ _-]');
+  const others = OTHER_RUNTIME_NAMES.filter((n) => !n.startsWith(UPSTREAM_RUNTIME_WORD));
+  const othersAlt = others.map(nameRe).join('|');
+  const ownAlt = OTHER_RUNTIME_NAMES.filter((n) => n.startsWith(UPSTREAM_RUNTIME_WORD)).map(nameRe).join('|');
+  // `--<runtime>` reviewer-lane / offload selector flags → a generic lane placeholder.
+  c = c.replace(new RegExp(`--(?:${othersAlt}|${ownAlt})\\b`, 'gi'), '--<lane>');
+  // `<OTHER> RUNTIME` (e.g. an orchestrator rule addressed to a different host).
+  c = c.replace(new RegExp(`\\b(?:${othersAlt})[ \\t]+RUNTIME\\b`, 'gi'), (m) => shapedReplacement(m, 'non-Bob runtime'));
+  // The reference runtime (any compound form) → Bob.
+  c = c.replace(new RegExp(`\\b(?:${ownAlt})\\b`, 'gi'), 'Bob');
+  // Every other runtime → another runtime (case-shaped).
+  c = c.replace(new RegExp(`\\b(?:${othersAlt})\\b`, 'gi'), (m) => shapedReplacement(m, 'another runtime'));
+  // Vendors and model products.
+  c = c.replace(new RegExp(`\\b(?:${MODEL_VENDOR_NAMES.map(escapeRe).join('|')})\\b`, 'gi'), (m) => shapedReplacement(m, 'the model vendor'));
+  c = c.replace(new RegExp(`\\b${escapeRe(MODEL_PRODUCT_NAMES[0])}(?:-[\\w.]+)?\\b`, 'gi'), 'a model');
+  c = c.replace(new RegExp(`\\b(?:${MODEL_PRODUCT_NAMES.slice(1).map(escapeRe).join('|')})\\b`, 'gi'), (m) => shapedReplacement(m, 'a local model server'));
+  return neutralizeModelReferences(c);
+}
+
+/** Fence info-strings whose block body is executable shell (identifiers are load-bearing). */
+const SHELL_FENCE_RE = /^[ \t]*(?:```|~~~)[ \t]*(?:bash|sh|shell|zsh|console)\b/;
+
+/**
+ * Neutralize a SHELL block: only its comment lines and its echo/printf message
+ * lines are prose a person sees, so only those get the name rules. Bare
+ * identifiers (a `case … in <runtime-id>)` arm, a `[ "$RUNTIME" = <id> ]` test, a
+ * `--<runtime>` token) are
+ * left as-is: renaming them would either activate another host's branch on Bob
+ * or leave a dead arm with a misleading name.
+ */
+function neutralizeShellBlock(block) {
+  return block
+    .split('\n')
+    .map((line) => (/^[ \t]*#/.test(line) || /^[ \t]*(?:echo|printf)\b/.test(line)
+      ? neutralizeAgentNamesInProse(line)
+      : line))
+    .join('\n');
+}
+
+/**
+ * Bob-ify one runtime document (a converted command/skill or a vendored
+ * workflow/reference/template/context). Paths and the resolver preamble are
+ * rewritten everywhere; prose — and every fenced block that is NOT shell
+ * (json/xml/markdown/text examples the model reads as templates) — is fully
+ * neutralized; shell blocks get comment + echo lines only (see
+ * neutralizeShellBlock). Idempotent: no replacement reintroduces a matched token.
+ *
+ * @param {string} content
+ * @param {{gsdCoreDir:string, bobHome:string}} loc
+ *   gsdCoreDir  `.bob/gsd-core` (local) or `<abs target>/gsd-core` (global)
+ *   bobHome     `.bob` (local) or the absolute target (global)
+ * @returns {string}
+ */
+function bobifyRuntimeDoc(content, loc) {
+  const withPaths = swapResolverPreamble(rewriteUpstreamHostPaths(content, loc), loc);
+  // Split on fenced code blocks so shell identifiers are never touched by prose rules.
+  const parts = withPaths.split(/(^[ \t]*(?:```|~~~)[^\n]*\n[\s\S]*?^[ \t]*(?:```|~~~)[ \t]*$)/m);
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 0) return neutralizeAgentNamesInProse(part);
+      return SHELL_FENCE_RE.test(part) ? neutralizeShellBlock(part) : neutralizeAgentNamesInProse(part);
+    })
+    .join('');
+}
+
+/** Replace every upstream resolver-preamble line with the Bob-only one. */
+function swapResolverPreamble(content, loc) {
+  const preamble = bobResolverPreamble(loc.gsdCoreDir);
+  return content.replace(RESOLVER_LINE_RE, (line) => line.match(/^[ \t]*/)[0] + preamble);
+}
+
+/**
+ * Bob-ify a runtime SHELL file (e.g. the launcher snippet upstream ships beside
+ * the workflows): paths + preamble everywhere, name rules on comments/echo only.
+ * @param {string} content
+ * @param {{gsdCoreDir:string, bobHome:string}} loc
+ */
+function bobifyRuntimeShell(content, loc) {
+  return neutralizeShellBlock(swapResolverPreamble(rewriteUpstreamHostPaths(content, loc), loc));
+}
+
 module.exports = {
+  bobifyRuntimeDoc,
+  bobifyRuntimeShell,
+  bobResolverPreamble,
+  rewriteUpstreamHostPaths,
+  neutralizeAgentNamesInProse,
+  OTHER_RUNTIME_NAMES,
+  MODEL_VENDOR_NAMES,
+  MODEL_PRODUCT_NAMES,
+  BOB_INSTRUCTION_FILE,
   UNSUPPORTED_MARKER,
   BOB_SKIP_LIST,
   BOB_CAPABILITY_DECL,

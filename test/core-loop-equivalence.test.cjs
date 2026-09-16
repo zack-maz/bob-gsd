@@ -3,14 +3,14 @@
 /**
  * core-loop-equivalence.test.cjs — CORE-01..05 / D-05 / RUNTIME-03.
  *
- * Proves the 6 vendored core-loop Claude command sources convert correctly and
+ * Proves the 6 vendored core-loop upstream command sources convert correctly and
  * deterministically into Bob-conformant artifacts:
  *   - per-command golden diff (×6): convertClaudeCommandToBobCommand / ...Skill
  *     are byte-identical to frozen fixtures under test/fixtures/core-loop/.
  *   - empty-description guard (×6): each converted command carries a NON-EMPTY
  *     description + argument-hint, and strips effort/allowed-tools/agent (Bob
  *     silently ignores a description-less skill — RESEARCH Pitfall 2/4).
- *   - neutralization (×6): each converted body carries no Claude config-home
+ *   - neutralization (×6): each converted body carries no upstream config-home
  *     PATH ref and no colon-dialect command ref; carries .bob + hyphen form.
  *     Forbidden tokens are built PROGRAMMATICALLY so this file's prose cannot
  *     self-trip the assertions.
@@ -18,7 +18,7 @@
  *     project-name string and NO TODO/placeholder/{{ markers — the explicit
  *     guard against a structurally-valid-but-empty artifact.
  *   - byte-compat proxy (RUNTIME-03): the runtime-agnostic .planning/ write path
- *     yields byte-identical output under the bob vs claude config home, and the
+ *     yields byte-identical output under the bob vs the reference config home, and the
  *     resolved config home leaks nowhere into the artifact body.
  *
  * Hermetic: reads vendored sources + frozen fixtures; any scratch write goes to
@@ -51,8 +51,9 @@ const fixDir = path.join(repoRoot, 'test', 'fixtures', 'core-loop');
 
 // Forbidden / required tokens built PROGRAMMATICALLY (mirrors command-golden.test.cjs)
 // so the test prose itself never contains the literal tokens it forbids.
-// NOTE: the config-home leak target is the PATH form (`.claude/`), NOT the bare
-// substring `.claude` — the core-loop sources legitimately reference a `--claude`
+// NOTE: the config-home leak target is the PATH form (the upstream dot-home with a
+// trailing slash), NOT the bare dot-home substring — the core-loop sources
+// legitimately reference a `--<runtime>`
 // reviewer flag, which is real content, not a config-home path ref.
 const claudeHomePath = ['.', 'claude', '/'].join('');
 const colonDialect = ['gsd', ':'].join('');

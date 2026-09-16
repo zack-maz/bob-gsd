@@ -60,8 +60,13 @@ test('creates .planning/config.json with the full owned set (text_mode, use_work
   assert.equal(res.written, true);
   assert.equal(res.path, cfgPath(ws));
   const parsed = JSON.parse(fs.readFileSync(cfgPath(ws), 'utf8'));
-  assert.deepEqual(parsed, { workflow: OWNED_WORKFLOW, context_window: BOB_CONTEXT_WINDOW });
-  assert.equal(parsed.context_window, 270000, "Bob's 270k window seeded top-level");
+  assert.deepEqual(parsed, {
+    workflow: OWNED_WORKFLOW,
+    context_window: BOB_CONTEXT_WINDOW,
+    resolve_model_ids: BOB_OWNED_CONFIG.resolve_model_ids,
+  });
+  assert.equal(parsed.context_window, 200000, "the floor of Bob's documented 200k–270k window, seeded top-level");
+  assert.equal(parsed.resolve_model_ids, 'omit', 'Bob owns model routing — no model ids resolved into dispatches');
   assert.equal(parsed.workflow.text_mode, true, 'text_mode set');
   assert.equal(
     parsed.workflow.use_worktrees,
@@ -70,7 +75,7 @@ test('creates .planning/config.json with the full owned set (text_mode, use_work
   );
 });
 
-test('preserves user keys and sets the owned workflow keys + context_window:270000', () => {
+test('preserves user keys and sets the owned workflow keys + context_window + resolve_model_ids', () => {
   const ws = scratchWorkspace();
   seedConfig(ws, JSON.stringify({ workflow: { granularity: 'coarse' }, other: 1 }, null, 2) + '\n');
   const res = mergeTextMode(ws);
@@ -80,7 +85,8 @@ test('preserves user keys and sets the owned workflow keys + context_window:2700
   assert.equal(parsed.workflow.text_mode, true, 'text_mode set');
   assert.equal(parsed.workflow.use_worktrees, false, 'use_worktrees:false set');
   assert.equal(parsed.other, 1, 'top-level user key preserved');
-  assert.equal(parsed.context_window, 270000, 'context_window added/set to 270000');
+  assert.equal(parsed.context_window, BOB_CONTEXT_WINDOW, 'context_window added/set to the seeded floor');
+  assert.equal(parsed.resolve_model_ids, 'omit', 'resolve_model_ids seeded');
 });
 
 test('is idempotent — byte-identical output on the second run (incl. context_window)', () => {
@@ -91,7 +97,7 @@ test('is idempotent — byte-identical output on the second run (incl. context_w
   const second = fs.readFileSync(cfgPath(ws));
   assert.ok(first.equals(second), 'second run produces byte-identical bytes');
   assert.ok(
-    first.toString('utf8').includes('"context_window": 270000'),
+    first.toString('utf8').includes(`"context_window": ${BOB_CONTEXT_WINDOW}`),
     'seeded context_window persists byte-identically across runs',
   );
 });
@@ -143,7 +149,7 @@ test('dryRun computes the result but writes nothing to disk', () => {
   assert.equal(fs.existsSync(cfgPath(ws)), false, 'no config.json created on disk');
   assert.ok(res.bytes && res.bytes.includes('text_mode'), 'would-be bytes still computed');
   assert.ok(
-    res.bytes.includes('"context_window": 270000'),
+    res.bytes.includes(`"context_window": ${BOB_CONTEXT_WINDOW}`),
     'would-be bytes include the seeded context_window',
   );
 });
@@ -157,10 +163,11 @@ test('path is always <workspaceRoot>/.planning/config.json — never under a sco
 
 // ---- unmergeOwnedKeys — the pure inverse the uninstall path calls -----------
 
-test('unmergeOwnedKeys removes every owned key (text_mode, use_worktrees, context_window)', () => {
+test('unmergeOwnedKeys removes every owned key (text_mode, use_worktrees, context_window, resolve_model_ids)', () => {
   const cfg = unmergeOwnedKeys({
     workflow: { ...OWNED_WORKFLOW },
     context_window: BOB_CONTEXT_WINDOW,
+    resolve_model_ids: BOB_OWNED_CONFIG.resolve_model_ids,
   });
   // The whole workflow object was owned, so it is dropped rather than left empty.
   assert.deepEqual(cfg, {}, 'nothing of the seeded set survives');
@@ -170,6 +177,7 @@ test('unmergeOwnedKeys preserves user keys and leaves a surviving workflow objec
   const cfg = unmergeOwnedKeys({
     workflow: { ...OWNED_WORKFLOW, granularity: 'coarse' },
     context_window: BOB_CONTEXT_WINDOW,
+    resolve_model_ids: BOB_OWNED_CONFIG.resolve_model_ids,
     other: 1,
   });
   assert.deepEqual(cfg, { workflow: { granularity: 'coarse' }, other: 1 });

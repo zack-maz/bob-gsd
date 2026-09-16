@@ -7,7 +7,7 @@
  * the `"bob"` registry entry block in the vendored capability-registry.cjs, and
  * (when present) a dedicated `bob-adapter.cjs` module. The scan is scoped to the
  * bob entry + adapter ONLY — the rest of the vendored tree legitimately names
- * claude/gemini/etc. as peer runtimes.
+ * other runtimes as peers.
  *
  * The forbidden brand-token set is built PROGRAMMATICALLY from a base64-encoded
  * array so this test file does not itself contain a bare forbidden literal that
@@ -22,7 +22,7 @@ const path = require('node:path');
 const { vendorLib } = require('./_helpers/vendor.cjs');
 
 // Forbidden backend brand names, base64-encoded so no bare literal lives here.
-// Decodes to: ['Claude','Gemini','Granite','GPT']
+// Decodes to the four model-backend brand tokens the invariant forbids.
 const FORBIDDEN_TOKENS = ['Q2xhdWRl', 'R2VtaW5p', 'R3Jhbml0ZQ==', 'R1BU'].map((b) =>
   Buffer.from(b, 'base64').toString('utf8'),
 );
@@ -32,8 +32,8 @@ const FORBIDDEN_TOKENS = ['Q2xhdWRl', 'R2VtaW5p', 'R3Jhbml0ZQ==', 'R1BU'].map((b
  * before brand matching:
  *   - comment / jsdoc lines (a documenting head-comment must not self-trip)
  *   - gsd-core converter NAMES of the form `convertClaudeCommandTo<Runtime>*`.
- *     The leading "Claude" there is gsd-core's universal SOURCE-FORMAT prefix
- *     (every runtime — cursor, cline, antigravity — names its converters the
+ *     The leading reference-runtime word there is gsd-core's universal SOURCE-FORMAT
+ *     prefix (every runtime names its converters the
  *     same way); it denotes "the canonical source skill format", not a model
  *     backend selected at runtime. Backend-neutrality forbids backend BRANCHING
  *     / model selection in the bob core, not gsd-core's converter naming dialect.
