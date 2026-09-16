@@ -15,19 +15,19 @@
  *     test/model-neutrality.test.cjs (Group C).
  *
  * Groups:
- *   A — structural equivalence (per stem, all 28): each source converts to a
+ *   A — structural equivalence (per stem, all 31): each source converts to a
  *       Bob-conformant command (non-empty description; argument-hint IFF the
  *       source declared one; effort/allowed-tools/agent/type/requires stripped)
  *       and skill (name + non-empty description only, no argument-hint); neither
  *       body carries a Claude config-home path form or the colon command dialect;
  *       the conversion carries the .bob home + hyphen form.
- *   B — neutrality (per stem, all 28): scanModelLiterals over each EMITTED
+ *   B — neutrality (per stem, all 31): scanModelLiterals over each EMITTED
  *       (neutralizeModelReferences post-pass, as stage.cjs applies) command and
  *       skill returns [] (reuse the shared detector, D-06).
  *   C — emitted count (CMD-01, D-07): one scratch stage() run emits N command
  *       files and N skill SKILL.md files where N === the number of
- *       commands/gsd sources; a single guard pins that N === 28.
- *   D — roster reflects 28 (CMD-02): repo-root SUPPORT-ROSTER.md lists every
+ *       commands/gsd sources; a single guard pins that N === 31.
+ *   D — roster reflects 31 (CMD-02): repo-root SUPPORT-ROSTER.md lists every
  *       commands/gsd stem as gsd-<stem> under the Supported section.
  *
  * Hermetic: the converter is resolved via requireVendor (the repo's vendored
@@ -51,7 +51,7 @@ const { newReport } = require(path.join(repoRoot, 'src', 'installer', 'report.cj
 const manifestMod = require(path.join(repoRoot, 'src', 'installer', 'manifest.cjs'));
 
 // The drift-proof spine: enumerate stems from the directory, NEVER a hardcoded
-// 28-name list (mirrors roster-capmap.test.cjs:53-67).
+// 31-name list (mirrors roster-capmap.test.cjs:53-67).
 const cmdSrcDir = path.join(repoRoot, 'commands', 'gsd');
 const stems = fs
   .readdirSync(cmdSrcDir)
@@ -108,7 +108,7 @@ function baseOpts(overrides = {}) {
   };
 }
 
-// ---- Group A — structural equivalence (per stem, all 28) ---------------------
+// ---- Group A — structural equivalence (per stem, all 31) ---------------------
 
 for (const stem of stems) {
   const name = `${hyphenForm}${stem}`;
@@ -173,7 +173,7 @@ test('at least one converted body references the .bob home + hyphen form (positi
   assert.ok(sawHyphenForm, 'the conversion carries the hyphen command form');
 });
 
-// ---- Group B — neutrality (per stem, all 28) ---------------------------------
+// ---- Group B — neutrality (per stem, all 31) ---------------------------------
 
 for (const stem of stems) {
   const name = `${hyphenForm}${stem}`;
@@ -216,11 +216,11 @@ test('CMD-01: a scratch stage() run emits one command + one skill per source (co
   assert.equal(emittedSkills.length, stems.length, 'emitted .bob/skills/gsd-*/SKILL.md === source count');
   assert.equal(emittedCmds.length, emittedSkills.length, 'command count === skill count');
 
-  // The SINGLE pinned literal 28 (Pitfall 4) — every other count derives from here.
-  assert.equal(stems.length, 28, 'CMD-01: commands/gsd/ holds exactly 28 sources');
+  // The SINGLE pinned literal 31 (Pitfall 4) — every other count derives from here.
+  assert.equal(stems.length, 31, 'CMD-01: commands/gsd/ holds exactly 31 sources');
 });
 
-// ---- Group D — roster reflects 28 (CMD-02) -----------------------------------
+// ---- Group D — roster reflects 31 (CMD-02) -----------------------------------
 
 test('CMD-02: repo-root SUPPORT-ROSTER.md lists every source stem as gsd-<stem> under Supported', () => {
   const roster = fs.readFileSync(path.join(repoRoot, 'SUPPORT-ROSTER.md'), 'utf8');

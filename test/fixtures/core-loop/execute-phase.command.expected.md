@@ -1,5 +1,5 @@
 ---
-description: "Execute all plans in a phase with wave-based parallelization"
+description: "SDD phase execution — execute all plans in a phase with dependency-aware wave parallelization"
 argument-hint: "<phase-number> [--wave N] [--gaps-only] [--interactive] [--tdd]"
 ---
 
@@ -44,7 +44,7 @@ Phase: $1
 - If none of these tokens appear, run the standard full-phase execution flow with no flag-specific filtering
 - Do not infer that a flag is active just because it is documented in this prompt
 
-Context files are resolved inside the workflow via `gsd-tools query init.execute-phase` and per-subagent `<files_to_read>` blocks.
+Context files are resolved inside the workflow via `gsd-tools query init.execute-phase` and per-subagent `<required_reading>` blocks.
 </context>
 
 <process>

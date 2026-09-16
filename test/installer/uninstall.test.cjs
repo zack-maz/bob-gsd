@@ -4,7 +4,10 @@
  * uninstall.test.cjs — INSTALL-05 / D-06 / D-07. After an install, --uninstall:
  *   - deletes matching `file` entries,
  *   - UN-MERGES the gsd slice from custom_modes.yaml (user `my-mode` kept, no gsd),
- *   - removes ONLY workflow.text_mode from .planning/config.json (user keys kept),
+ *   - removes ONLY the adapter-owned keys from .planning/config.json — since
+ *     gsd-core 1.14.0 that set is workflow.text_mode, workflow.use_worktrees and
+ *     the top-level context_window (BOB_OWNED_CONFIG); every user key is kept and
+ *     an emptied `workflow` object is dropped,
  *   - deletes the manifest dotfile,
  *   - and NEVER deletes the workspace .planning/ directory.
  */
@@ -16,6 +19,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { repoRoot } = require('../_helpers/vendor.cjs');
+
+const { BOB_OWNED_CONFIG } = require(path.join(repoRoot, 'src', 'installer', 'config-merge.cjs'));
 
 const ENTRY = path.join(repoRoot, 'bin', 'gsd-bob.cjs');
 const USER_SEEDED = path.join(repoRoot, 'test', 'fixtures', 'custom_modes', 'user-seeded.yaml');
@@ -63,11 +68,21 @@ test('uninstall un-merges slices, deletes tracked files, preserves .planning/', 
   assert.ok(modes.includes('slug: my-mode'), 'user my-mode preserved');
   assert.equal((modes.match(/slug: gsd$/gm) || []).length, 0, 'gsd slug un-merged');
 
-  // config.json un-merged: user key kept, workflow.text_mode removed, file kept.
+  // config.json un-merged: user key kept, EVERY adapter-owned key removed, file kept.
+  // The owned set is read from BOB_OWNED_CONFIG so a future key can never be
+  // seeded-but-not-un-merged without this failing.
   assert.ok(fs.existsSync(cfgPath), '.planning/config.json still exists');
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
   assert.equal(cfg.userKey, 'keep-me', 'user config key preserved');
-  assert.ok(!cfg.workflow || cfg.workflow.text_mode === undefined, 'workflow.text_mode removed');
+  for (const key of Object.keys(BOB_OWNED_CONFIG.workflow)) {
+    assert.ok(!cfg.workflow || cfg.workflow[key] === undefined, `workflow.${key} removed`);
+  }
+  assert.equal(cfg.context_window, undefined, 'top-level context_window removed');
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(cfg, 'workflow'),
+    false,
+    'the workflow object, emptied by the un-merge, is dropped entirely',
+  );
 
   // Manifest dotfile gone.
   assert.equal(

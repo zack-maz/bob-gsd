@@ -15,8 +15,13 @@
  *      discuss-phase, execute-phase, verify-work, progress) — execute-plan and
  *      verify-phase are WORKFLOWS (gsd-core/workflows/, staged wholesale), NOT
  *      .bob/commands. CORE-03 is covered transitively via execute-phase→execute-plan;
- *      CORE-04 via verify-work→verify-phase. We assert those workflow files land in
+ *      CORE-04 via verify-work→transition. We assert those workflow files land in
  *      the staged gsd-core/workflows/ payload, not as commands.
+ *      (gsd-core 1.14.0 REMOVED workflows/verify-phase.md — together with
+ *      discovery-phase and plan-milestone-gaps. verify-work's terminal hand-off is
+ *      now `workflows/transition.md`, which execute-phase also chains to, so it is
+ *      the current workflow-only artifact that carries the same contract: reached
+ *      from a curated command's workflow, never emitted as a slash command.)
  *
  *   2. STRUCTURE (CORE-02) — a representative produced/frozen PLAN.md and
  *      PROJECT.md carry the documented section/frontmatter markers from the
@@ -42,7 +47,7 @@ const { repoRoot } = require('./_helpers/vendor.cjs');
 
 const ENTRY = path.join(repoRoot, 'bin', 'gsd-bob.cjs');
 
-// The core loop ports SIX slash commands. execute-plan + verify-phase are
+// The core loop ports SIX slash commands. execute-plan + transition are
 // workflows (staged under gsd-core/workflows/), NOT .bob/commands.
 const CORE_LOOP_COMMANDS = [
   'gsd-new-project',
@@ -93,31 +98,56 @@ test('e2e: real installer emits the converted core-loop command + skill artifact
   }
 });
 
-test('e2e: execute-plan + verify-phase ship as staged workflows, not as .bob/commands (CORE-03/04 transitive)', () => {
+test('e2e: execute-plan + transition ship as staged workflows, not as .bob/commands (CORE-03/04 transitive)', () => {
   const target = path.join(scratch('tgt'), '.bob');
   const cwd = scratch('ws');
 
   runEntry(['--bob', '--global', '-c', target], cwd);
 
-  // CORE-03 (execute-plan) and CORE-04 (verify-phase) are covered transitively:
+  // CORE-03 (execute-plan) and CORE-04 (transition) are covered transitively:
   // they are WORKFLOWS staged wholesale under gsd-core/workflows/, reached from
   // execute-phase / verify-work, NOT emitted as slash commands.
-  assert.ok(
-    fs.existsSync(path.join(target, 'gsd-core', 'workflows', 'execute-plan.md')),
-    'execute-plan.md staged as a workflow (CORE-03 transitive via execute-phase)',
-  );
-  assert.ok(
+  //
+  // WORKFLOW_ONLY pairs each workflow file with the curated command whose
+  // workflow references it, so the "reached from the core loop" half of the claim
+  // is asserted here too rather than only asserted in prose.
+  const WORKFLOW_ONLY = [
+    { workflow: 'execute-plan.md', reachedFrom: 'execute-phase', requirement: 'CORE-03' },
+    { workflow: 'transition.md', reachedFrom: 'verify-work', requirement: 'CORE-04' },
+  ];
+
+  for (const { workflow, reachedFrom, requirement } of WORKFLOW_ONLY) {
+    assert.ok(
+      fs.existsSync(path.join(target, 'gsd-core', 'workflows', workflow)),
+      `${workflow} staged as a workflow (${requirement} transitive via ${reachedFrom})`,
+    );
+    // The reaching workflow really does chain to it — so the transitive claim is
+    // evidence-backed and a future upstream removal fails here, loud.
+    const reacher = fs.readFileSync(
+      path.join(target, 'gsd-core', 'workflows', `${reachedFrom}.md`),
+      'utf8',
+    );
+    assert.ok(
+      reacher.includes(`workflows/${workflow}`),
+      `workflows/${reachedFrom}.md references workflows/${workflow}`,
+    );
+    // And it is NOT a command artifact.
+    const stem = path.basename(workflow, '.md');
+    assert.ok(
+      !fs.existsSync(path.join(target, 'commands', `gsd-${stem}.md`)),
+      `${stem} is a workflow, not a .bob command`,
+    );
+    assert.ok(
+      !fs.existsSync(path.join(target, 'skills', `gsd-${stem}`, 'SKILL.md')),
+      `${stem} is a workflow, not a .bob skill`,
+    );
+  }
+
+  // The workflow gsd-core 1.14.0 REMOVED must not reappear via a stale vendor.
+  assert.equal(
     fs.existsSync(path.join(target, 'gsd-core', 'workflows', 'verify-phase.md')),
-    'verify-phase.md staged as a workflow (CORE-04 transitive via verify-work)',
-  );
-  // And they are NOT command artifacts.
-  assert.ok(
-    !fs.existsSync(path.join(target, 'commands', 'gsd-execute-plan.md')),
-    'execute-plan is a workflow, not a .bob command',
-  );
-  assert.ok(
-    !fs.existsSync(path.join(target, 'commands', 'gsd-verify-phase.md')),
-    'verify-phase is a workflow, not a .bob command',
+    false,
+    'verify-phase.md was removed upstream in 1.14.0 and must not be staged',
   );
 });
 

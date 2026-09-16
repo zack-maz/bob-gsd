@@ -418,3 +418,52 @@ test('dryRun populates report buckets but writes/copies/removes nothing', () => 
   assert.equal(fs.existsSync(path.join(target, 'SUPPORT-ROSTER.md')), false, 'no roster written');
   assert.ok(opts.report.written.length > 0, 'report.written populated with the PLAN');
 });
+
+// ---- the STAGED roster covers the whole curated source set ----------------
+//
+// Before the Phase 13 re-vendor the staged SUPPORT-ROSTER.md was checked only for
+// existence, and rosterCandidates() used to be seeded from a 3-name representative
+// set. It is now DERIVED from `commands/gsd/*.md` — the same spine the convertible
+// loop iterates — so the staged roster and the emitted artifact set can never
+// disagree. This pins that: a real-payload stage lists EVERY curated stem as
+// `gsd-<stem>` under the Supported heading, and the count matches the source count.
+
+test('the STAGED SUPPORT-ROSTER.md lists every curated stem as gsd-<stem> under Supported', () => {
+  const { rosterCandidates } = require(path.join(pkgRoot, 'src', 'installer', 'stage.cjs'));
+
+  // Stage the REAL package payload (not the minimal fixture) so the roster is
+  // rendered from the real curated source set.
+  const target = scratch('target');
+  const opts = baseOpts({ target, repoRoot: pkgRoot });
+  stage(opts);
+
+  const roster = fs.readFileSync(path.join(target, 'SUPPORT-ROSTER.md'), 'utf8');
+
+  // Slice ONLY the Supported section so a stem named in an Unsupported reason line
+  // can never falsely satisfy the assertion (the docs-conformance idiom).
+  const supIdx = roster.search(/^##\s+Supported\b/m);
+  assert.ok(supIdx >= 0, 'the staged roster has a Supported section');
+  const afterSup = roster.slice(supIdx);
+  const nextIdx = afterSup.slice(1).search(/^##\s+/m);
+  const supported = nextIdx >= 0 ? afterSup.slice(0, nextIdx + 1) : afterSup;
+
+  // The drift-proof spine: enumerate stems from the directory, never a name list.
+  const stems = fs
+    .readdirSync(path.join(pkgRoot, 'commands', 'gsd'))
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => path.basename(f, '.md'));
+
+  const missing = stems.filter((stem) => !new RegExp(`^-\\s+gsd-${stem}\\s*$`, 'm').test(supported));
+  assert.deepEqual(missing, [], 'every curated stem is listed in the staged roster');
+
+  // Listed count === source count: the roster is no longer a representative subset.
+  const listed = [...supported.matchAll(/^-\s+(gsd-[a-z0-9-]+)\s*$/gm)].map((m) => m[1]);
+  assert.equal(listed.length, stems.length, 'the roster lists exactly the curated source set, no more');
+
+  // And rosterCandidates() — the function that feeds the render — derives the same set.
+  assert.deepEqual(
+    rosterCandidates(pkgRoot).map((c) => c.name).sort(),
+    stems.map((s) => `gsd-${s}`).sort(),
+    'rosterCandidates() is derived from commands/gsd, not a hand-maintained list',
+  );
+});

@@ -9,7 +9,7 @@
  * process.cwd() — V5 input-validation control); no scratch tmpdir, no cleanup.
  *
  * The drift-proof spine enumerates stems from `commands/gsd/*.md` (readdirSync),
- * with the SINGLE pinned literal `28` (matching command-expansion.test.cjs L220);
+ * with the SINGLE pinned literal `31` (matching command-expansion.test.cjs L220);
  * every other count/list derives from `stems`.
  *
  * Three set-equality assertions (RESEARCH §3):
@@ -30,16 +30,16 @@ const path = require('node:path');
 const { repoRoot } = require('./_helpers/vendor.cjs');
 
 // The drift-proof spine: enumerate stems from the directory, NEVER a hardcoded
-// 28-name list.
+// 31-name list.
 const cmdSrcDir = path.join(repoRoot, 'commands', 'gsd');
 const stems = fs
   .readdirSync(cmdSrcDir)
   .filter((f) => f.endsWith('.md'))
   .map((f) => path.basename(f, '.md'));
 
-// The SINGLE pinned literal 28 (Pitfall 4) — every other count derives from here.
-test('docs-conformance: commands/gsd/ holds exactly 28 sources', () => {
-  assert.equal(stems.length, 28, 'commands/gsd/ must hold exactly 28 sources');
+// The SINGLE pinned literal 31 (Pitfall 4) — every other count derives from here.
+test('docs-conformance: commands/gsd/ holds exactly 31 sources', () => {
+  assert.equal(stems.length, 31, 'commands/gsd/ must hold exactly 31 sources');
 });
 
 /**
@@ -107,7 +107,7 @@ test('assertion 3: COMMANDS.md token set == roster Supported set', () => {
 });
 
 // The README prose count is tied to `stems.length` so a future count bump forces the
-// README to be updated in lockstep — closing the unguarded hardcoded-`28` drift
+// README to be updated in lockstep — closing the unguarded hardcoded-`31` drift
 // surface the pinned literal + set-equality assertions do not cover (WR-04).
 test('assertion 4: README prose command count tracks the stem count', () => {
   const readme = fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
