@@ -1,11 +1,12 @@
 ---
 name: gsd:new-milestone
 description: Start a new milestone cycle — update PROJECT.md and route to requirements
-argument-hint: "[milestone name, e.g., 'v1.1 Notifications']"
+argument-hint: "[milestone name, e.g., 'v1.1 Notifications'] [--ws <name>] [--reset-phase-numbers]"
 allowed-tools:
   - Read
   - Write
   - Bash
+  - Grep
   - Agent
   - AskUserQuestion
 requires: [new-project, phase, plan-phase]
@@ -36,7 +37,7 @@ Brownfield equivalent of new-project. Project exists, PROJECT.md has history. Ga
 <context>
 Milestone name: $ARGUMENTS (optional - will prompt if not provided)
 
-Project and milestone context files are resolved inside the workflow (`init new-milestone`) and delegated via `<files_to_read>` blocks where subagents are used.
+Project and milestone context files are resolved inside the workflow (`init new-milestone`) and delegated via `<required_reading>` blocks where subagents are used.
 </context>
 
 <process>

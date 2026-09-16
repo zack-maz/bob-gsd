@@ -1,33 +1,49 @@
 ---
 gsd_state_version: 1.0
 milestone: v3.0
-milestone_name: Bob 2.0 & gsd-core 1.10 Re-baseline
+milestone_name: Bob 2.0 & gsd-core 1.14 Re-baseline
 status: in-progress
-last_updated: "2026-08-13T22:10:00.000Z"
-last_activity: 2026-08-13
+last_updated: "2026-09-16T00:00:00.000Z"
+last_activity: 2026-09-16
 progress:
-  total_phases: 6
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 17
+  total_phases: 7
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 29
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-13)
+See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** A Bob user installs via a single command and runs the full GSD planning loop (new-project → plan-phase → execute-phase → verify) natively, producing the same `.planning/` artifacts GSD produces in the reference runtime.
-**Current focus:** Phase 13 — gsd-core 1.10.0 re-sync
+**Current focus:** Phase 13 complete — next up is Phase 15 (MCP) or Phase 18 (NEUTRAL-04); Phases 14 and 17 are blocked
 
 ## Current Position
 
-Phase: 12 complete — Bob 2.0 Capability Re-verification
-Plan: 12-01 complete
-Status: Ready to plan Phase 13
-Last activity: 2026-08-13 — Phase 12 closed; BOB2-01..05 verified against live Bob Shell 2.0.1; P0 global custom-modes path bug found and fixed
+Phase: 13 complete — gsd-core 1.14.0 Re-sync
+Plan: 13-01 complete
+Status: Phase 13 closed. **No unblocked phase is the obvious next one** — Phase 14 is blocked on missing Bob docs, Phase 17 on missing Bob 2.x hardware. Phase 15 (MCP) and Phase 18 (NEUTRAL-04) are both runnable.
+Last activity: 2026-09-16 — Phase 13 executed end to end: payload re-vendored 1.6.1 → 1.14.0, nine deltas (was six) with preflight + verify, descriptor re-shaped and validated by 1.14.0's own validator, 28 → 31 commands, `use_worktrees` seed + `.gsd-runtime` marker, global installs made absolute, resolver `.bob` probe, docs + planning record rewritten
+
+**Decisions taken in Phase 13 (D-01..D-11):**
+
+| # | Decision |
+|---|---|
+| D-01 | Target **gsd-core 1.14.0** (npm `latest`), not the roadmap's 1.10.0 — nothing in 1.11–1.14 removes a surface gsd-bob uses |
+| D-02 | Keep `engines.node >= 22.15.0` despite upstream's `>= 24` — the only Node-24 API (`RegExp.escape`) is feature-detected and the payload was executed on Node 22.15.0. Re-verify on every bump |
+| D-03 | Keep `commands/gsd/*.md` as the conversion source, not upstream's pre-hyphenated `skills/` — `argument-hint` parity and zero churn to goldens/roster/generators. Recorded as a future simplification, not adopted |
+| D-04 | Seed `workflow.use_worktrees: false` into `.planning/config.json` at install (same mechanism as `text_mode` / `context_window`) — without it `/gsd-execute-phase` exits FATAL on 1.14.0. Declaring `orchestrator-worktree` instead needs a headless-Bob `orchestratorExec` spike (deferred) |
+| D-05 | **Bob 2.0.x is the supported target** (Shell 2.0.x, IDE 2.x); 1.0.x is documented as unsupported — no skills, no subagents, and 2.0.0 needs a fresh install anyway. No installer version probe, no 1.0.x tests. **(User decision, 2026-09-16)** |
+| D-06 | Vendor `next`, `onboard`, `quick-batch` (gate-decided; 28 → 31). `quick-batch` was checked against `use_worktrees=false` and passed |
+| D-07 | Fix the global-scope path bug: converters receive `isGlobal`, and stage rewrites `~/.bob/` to the absolute install target for global installs |
+| D-08 | Three new patch deltas — `VALID_CONVERTER_NAMES` entries, `.bob` probes in the `gsd_run` resolver preamble, the `.gsd-runtime` marker — plus a `preflight()` and an all-deltas `verifyAll()` so a failed anchor can never leave a half-patched tree |
+| D-09 | Descriptor drift guard: a test parses `REGISTRY_BLOCK`, deep-equals it to `runtimes.bob`, and runs 1.14.0's own `capability-validator` over the entry |
+| D-10 | **NEUTRAL-04 is deferred to its own phase (18)** — fuzzy prose rewriting across 31 commands under a new invariant, out of this compatibility task's scope. Recorded, not silently dropped |
+| D-11 | Version bumped to **0.3.0** in a separate `chore(release)` commit, with `package.json` wired to the GitHub repo (`repository`/`homepage`/`bugs`) and `THIRD-PARTY-NOTICES.md` carrying the upstream MIT notice (user instruction, 2026-09-16, superseding the original no-bump rule). Tag, push and `npm publish` remain user-confirmed |
 
 ## Performance Metrics
 
@@ -83,6 +99,7 @@ Last activity: 2026-08-13 — Phase 12 closed; BOB2-01..05 verified against live
 | Phase 10 P03 | 5m | 1 tasks | 1 files |
 | Phase 11 P01 | 18min | 3 tasks | 5 files |
 | Phase 12 P01 | ~50m | 5 reqs | 17 files |
+| Phase 13 P01 | — | 8 reqs | ~600 files |
 
 ## Accumulated Context
 
@@ -133,6 +150,15 @@ Recent decisions affecting current work:
 - [Phase 12]: The global/local custom-modes path is ASYMMETRIC (global `settings/custom_modes.yaml`, local `.bob/custom_modes.yaml`) and owned solely by `modesRelPathForScope()`. Never re-inline the literal — writing the global mode to the home root yields a file Bob silently ignores.
 - [Phase 12]: Bob validates mode `groups` as an OPEN string union, not an enum. Invalid group names load without error and grant no tool, so the emitted set must be pinned by test — a schema error will never catch it.
 - [Phase 12]: `BOB_CAPABILITY_DECL` is exported once from `src/bob-adapter.cjs` and imported by the staging engine and all three generators. It was previously four hand-copied literals whose comments each claimed to be the same declaration.
+- [Phase 13]: Target gsd-core **1.14.0**, not the roadmap's 1.10.0 — latest is what users get, and nothing in 1.11–1.14 removes a surface gsd-bob uses (D-01).
+- [Phase 13]: **Bob 2.0.x only** (user decision). 1.0.x has no skills and no subagents, so only `.bob/commands/` + the mode would load; 2.0.0 requires a fresh install anyway. No installer version probe and no 1.0.x test matrix (D-05).
+- [Phase 13]: The six-delta model is now **nine** — `VALID_CONVERTER_NAMES` allowlist entries, `.bob` probes in the `gsd_run` resolver preamble, and the per-install `gsd-core/.gsd-runtime` marker. `apply-bob-patches.cjs` gained `preflight()` (before the first write) and `verifyAll()` (after the run) because the 1.6.1-era script aborted half-applied on an anchor upstream had deleted in 1.7.0 (D-08).
+- [Phase 13]: `workflow.use_worktrees: false` is seeded at install alongside `text_mode` and `context_window`, from one `BOB_OWNED_CONFIG` declaration, and un-merged on uninstall. 1.14.0's execute-phase isolation gate exits FATAL on `dispatch.isolation: "none"` without it; Bob has no git-worktree primitive, so this preserves 1.6.1 behaviour rather than changing it (D-04).
+- [Phase 13]: Runtime identity lives in the payload marker `gsd-core/.gsd-runtime`, **never** in `.planning/config.json` — that file is the Claude↔Bob interchange surface and must not pin a runtime.
+- [Phase 13]: Global installs emit absolute `<target>/gsd-core/...` refs (converters take `isGlobal`; `absolutizeGlobalHome()` rewrites `~/.bob/`), local installs keep the workspace-relative form (D-07).
+- [Phase 13]: Keep `commands/gsd/*.md` as the conversion source rather than switching to upstream's pre-hyphenated `skills/` tree — `argument-hint` parity, zero churn to goldens/roster/generators. Recorded as a future simplification (D-03).
+- [Phase 13]: NEUTRAL-04 is deferred to its own Phase 18, recorded rather than silently dropped (D-10).
+- [Phase 13]: External/pluggable runtime descriptors are a verified **NO-GO** — every module that resolves a runtime requires the frozen `capability-registry.cjs` directly and never calls `capability-loader.cjs`'s `loadRegistry`. The vendored hand-patch stays; the upstream contribution shape is `capabilities/bob/capability.json` + a regenerated registry.
 - [Phase 12]: Roster candidates must all be real emitted artifacts — the synthetic `gsd-parallel-fanout` exemplar was removed. The gate's flag/skip path is proven by unit tests, not by a fictional roster row.
 
 ### Pending Todos
@@ -145,12 +171,14 @@ None yet.
 
 [Issues that affect future work]
 
-- ~~No live Bob on the dev device~~ **RESOLVED as of v3.0** — Bob Shell **2.0.1** is installed at `/opt/homebrew/bin/bob`. Phase 12 settled subagent isolation + fan-out, the config-home override, and the IDE-vs-Shell signal; **structured-choice prompts remain the one unverified primitive** (`structuredPrompts: false` is still a conservative default, not an observation). Note the install is SSO-authenticated, so `bob run` headless probes need `BOB_API_KEY` — inference-driven checks are user-driven.
+- **No live Bob 2.x on the dev device — AGAIN, as of 2026-09-16.** The machine now carries Bob Shell **1.0.4**, the generation gsd-bob declares unsupported (no skills, no subagents); the 2.0.1 install Phase 12 verified against is gone. Phase 12's findings stand — they were read out of the shipped 2.0.1 bundle and are recorded in `12-BOB2-EVIDENCE.md` — but **live 2.x verification is deferred again** (Phase 17 / ACCEPT-04), and Phase 13 was verified hermetically. `structuredPrompts: false` remains the one primitive that has never been observed either way. The 1.0.4 install is SSO-authenticated, so headless `bob run` probes would need `BOB_API_KEY`.
 - Backend-neutrality, the flag-gap contract, and `.planning/` root-anchoring are cross-cutting constraints established in Phase 2 and enforced through every later phase — including all of v3.0.
 - ~~**v3.0 P0 — tool-group contradiction.**~~ **RESOLVED in Phase 12.** Both doc pages describe real behaviour: `command` is a back-compat alias Bob 2.0.1 normalizes to `execute`. `260707-ey1`'s change was correct but its rationale was wrong — the seam was never dead (FU-06). The real hazard found underneath it: `groups` validates as an open string union, so a genuinely invalid group is accepted silently and grants no tool.
 - **NEW P0 found and fixed in Phase 12 — global installs emitted an invisible mode.** Bob 2.0 reads `~/.bob/settings/custom_modes.yaml`; gsd-bob wrote `~/.bob/custom_modes.yaml` (FU-05). Every global install through v0.2.2 is affected: the GSD mode never appeared and no error was raised. **The dev machine's own `~/.bob` still carries the broken v0.2.2 layout** — it needs a re-install before any live-session verification (BOB2-03's in-session leg, ACCEPT-04) can run.
-- **v3.0 constraint (2026-08-13, operator):** gsd-bob must never mention any model *or agent* other than Bob, and must not ask the user to select a model during GSD configuration. Tracked as NEUTRAL-04 → Phase 13 (the offending text is in the vendored payload, so it must be fixed after the 1.10.0 re-vendor, not before).
-- **v3.0 dependency risk:** Phase 13's 1.10.0 re-vendor is the payload foundation for Phases 14–17; a mixed 1.6.1/1.10.0 payload would undermine all of them. Keep the payload on one consistent version — the same discipline SYNC-01 imposed in v2.0.
+- **v3.0 constraint (2026-08-13, operator):** gsd-bob must never mention any model *or agent* other than Bob, and must not ask the user to select a model during GSD configuration. Tracked as NEUTRAL-04 → **Phase 18** (moved out of Phase 13 as D-10, 2026-09-16). The offending text lives in the vendored payload, so it had to wait for the 1.14.0 re-vendor; that is now done, and the 2026-08-13 inventory should be re-measured against the 1.14.0 emission before any rewriting starts.
+- ~~**v3.0 dependency risk:** Phase 13's re-vendor is the payload foundation for Phases 14–17~~ **DISCHARGED 2026-09-16** — the payload is on one consistent `1.14.0` (`gsd-core/VERSION`; no `1.6.1` residue outside the stock `legacy-cleanup.cjs` comment), with idempotency proven by a second patch-script run leaving the tree byte-identical.
+- **Phase 14 is blocked on missing documentation.** `.bob/agents/` persona files are not documented anywhere — the page was withdrawn (404) — and no page describes a persona format or its frontmatter. Emitting into that directory would be guessing. Also unresolved: 34 `gsd-*.md` persona files dated 2026-06-17 sit in `~/.bob/agents/` and are not in any gsd-bob manifest.
+- **Phase 17 is blocked on hardware** — see the Bob 1.0.4 note above.
 - **v3.0 two-upstream drift:** gsd-bob is pinned to both gsd-core and Bob's documented surface, and both moved (4 minor versions and 1 major respectively). Syncing one against a stale model of the other is exactly how the `command`/`execute` regression happened — hence Bob verification (12) precedes the re-vendor (13).
 - Several repo citations still point at `bob.ibm.com/docs/ide/...` pages for claims about Shell behavior. Bob 2.0 now publishes Shell-specific equivalents; Phase 12 should re-point them.
 
@@ -184,14 +212,17 @@ Resume file: .planning/ROADMAP.md
 
 ## Session Continuity (v3.0)
 
-Last session: 2026-08-13 — Phase 12 executed end to end (verification + fixes + tests + docs).
-Resume file: `.planning/phases/12-bob-2-0-capability-re-verification/12-01-SUMMARY.md`
+Last session: 2026-09-16 — Phase 13 executed end to end (re-vendor + installer + tests + docs + planning record), on branch `update/bob-latest-gsd-core`, **uncommitted**.
+Resume file: `.planning/phases/13-gsd-core-1-14-0-re-sync/13-01-SUMMARY.md`
+Also read: `13-REVENDOR-NOTES.md` (the real replay log + every golden justification) and the four `research/260916-*.md` reports (they supersede `research/v3.0-UPSTREAM-DELTA.md`).
 
 ## Operator Next Steps
 
-- **Re-install gsd-bob into the live `~/.bob`** — it still carries the v0.2.2 layout whose global mode Bob 2.0 ignores. Until this runs, the `gsd` mode is not selectable and no in-session verification is possible: `node bin/gsd-bob.cjs --bob --global`. Expect a Bob-home approval prompt (2.0.1 blocks auto-approval for `~/.bob` writes)
-- **Cut a release** — the BOB2-04 path fix affects every existing global install, so this is a user-visible correctness fix, not a routine bump
-- `/gsd-plan-phase 13` for the gsd-core 1.10.0 re-sync (now also carrying NEUTRAL-04 and a descriptor/patch-script drift guard)
+- **Review the Phase 13 branch** (`update/bob-latest-gsd-core`, six local commits ending in `chore(release): v0.3.0`) and decide on tag / push / `npm publish` (npm login is required on this machine — `npm whoami` returned E401)
+- **Publish 0.3.0** — the RESYNC-06 global-path fix and the `use_worktrees` seed both affect real installs (without the seed, `/gsd-execute-phase` is dead on 1.14.0); npm still serves 0.2.2 (0.2.3 was never published)
+- **Get a Bob 2.0.x install back on the device** to unblock Phase 17 / ACCEPT-04. The current Bob Shell is 1.0.4, which gsd-bob does not support
+- **Re-install gsd-bob into the live `~/.bob` once Bob 2.x is back** — the existing global install predates both the BOB2-04 modes-path fix and the RESYNC-06 absolute-path fix: `node bin/gsd-bob.cjs --bob --global`. Expect a Bob-home approval prompt (2.0.1+ never auto-approves `~/.bob` writes)
+- `/gsd-plan-phase 18` for NEUTRAL-04, or `/gsd-plan-phase 15` for the MCP seam — those are the two unblocked phases
 - Resolve the provenance of the 34 `gsd-*.md` persona files already in `~/.bob/agents/` (dated 2026-06-17, not in the gsd-bob manifest) before Phase 14 emits into that directory
 - Planning docs are **uncommitted** (`commit_docs: false` in config) — commit them by hand
 - Outstanding (housekeeping, no longer blocking): v2.0's phase directories (`.planning/phases/07-…` through `11-…`) are still in the live phase tree rather than archived under `.planning/milestones/v2.0-phases/`. Nothing is lost — unlike v1's, they were never deleted

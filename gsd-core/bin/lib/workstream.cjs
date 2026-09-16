@@ -17,6 +17,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 const node_fs_1 = __importDefault(require("node:fs"));
 const node_path_1 = __importDefault(require("node:path"));
+const clock_cjs_1 = require("./clock.cjs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const io = require("./io.cjs");
 const { output, error } = io;
@@ -67,7 +68,7 @@ function migrateToWorkstreams(cwd, workstreamName) {
             const src = node_path_1.default.join(baseDir, item.name);
             if (node_fs_1.default.existsSync(src)) {
                 const dest = node_path_1.default.join(wsDir, item.name);
-                node_fs_1.default.renameSync(src, dest);
+                (0, shell_command_projection_cjs_1.retryRenameSync)(src, dest);
                 filesMoved.push(item.name);
             }
         }
@@ -75,7 +76,7 @@ function migrateToWorkstreams(cwd, workstreamName) {
     catch (err) {
         for (const name of filesMoved) {
             try {
-                node_fs_1.default.renameSync(node_path_1.default.join(wsDir, name), node_path_1.default.join(baseDir, name));
+                (0, shell_command_projection_cjs_1.retryRenameSync)(node_path_1.default.join(wsDir, name), node_path_1.default.join(baseDir, name));
             }
             catch { /* ignore */ }
         }
@@ -133,8 +134,8 @@ function cmdWorkstreamCreate(cwd, name, options, raw) {
             }
             else {
                 try {
-                    const milestone = getMilestoneInfo(cwd);
-                    existingWsName = generateSlugInternal(milestone.name) || 'default';
+                    const milestone = getMilestoneInfo(cwd).value;
+                    existingWsName = generateSlugInternal(milestone?.name ?? null) || 'default';
                 }
                 catch {
                     existingWsName = 'default';
@@ -154,7 +155,7 @@ function cmdWorkstreamCreate(cwd, name, options, raw) {
     }
     (0, shell_command_projection_cjs_1.platformEnsureDir)(wsDir);
     (0, shell_command_projection_cjs_1.platformEnsureDir)(node_path_1.default.join(wsDir, 'phases'));
-    const today = new Date().toISOString().split('T')[0];
+    const today = clock_cjs_1.realClock.localToday();
     const stateContent = [
         '---',
         `workstream: ${slug}`,
@@ -206,6 +207,10 @@ function cmdWorkstreamList(cwd, raw) {
         has_roadmap: ws.files.roadmap,
         has_state: ws.files.state,
         status: ws.status,
+        // #2562: a refused shipped marker must reach the surface. Projecting
+        // `status` without it renders the refusal invisible at the CLI, which is
+        // the silent-collapse defect this issue is about.
+        milestone_shipped_unverified: ws.milestone_shipped_unverified,
         current_phase: ws.current_phase,
         phase_count: ws.phase_count,
         completed_phases: ws.completed_phases,
@@ -240,6 +245,7 @@ function cmdWorkstreamStatus(cwd, name, raw) {
         phase_count: inv.phase_count,
         completed_phases: inv.completed_phases,
         status: inv.status,
+        milestone_shipped_unverified: inv.milestone_shipped_unverified,
         current_phase: inv.current_phase,
         last_activity: inv.last_activity,
     }, raw, undefined);
@@ -264,7 +270,7 @@ function cmdWorkstreamComplete(cwd, name, options, raw) {
     if (active === name)
         setActiveWorkstream(cwd, null);
     const archiveDir = node_path_1.default.join(root, 'milestones');
-    const today = new Date().toISOString().split('T')[0];
+    const today = clock_cjs_1.realClock.localToday();
     let archivePath = node_path_1.default.join(archiveDir, `ws-${name}-${today}`);
     let suffix = 1;
     while (node_fs_1.default.existsSync(archivePath)) {
@@ -275,14 +281,14 @@ function cmdWorkstreamComplete(cwd, name, options, raw) {
     try {
         const entries = node_fs_1.default.readdirSync(wsDir, { withFileTypes: true });
         for (const entry of entries) {
-            node_fs_1.default.renameSync(node_path_1.default.join(wsDir, entry.name), node_path_1.default.join(archivePath, entry.name));
+            (0, shell_command_projection_cjs_1.retryRenameSync)(node_path_1.default.join(wsDir, entry.name), node_path_1.default.join(archivePath, entry.name));
             filesMoved.push(entry.name);
         }
     }
     catch (err) {
         for (const fname of filesMoved) {
             try {
-                node_fs_1.default.renameSync(node_path_1.default.join(archivePath, fname), node_path_1.default.join(wsDir, fname));
+                (0, shell_command_projection_cjs_1.retryRenameSync)(node_path_1.default.join(archivePath, fname), node_path_1.default.join(wsDir, fname));
             }
             catch { /* ignore */ }
         }
@@ -352,6 +358,7 @@ function cmdWorkstreamProgress(cwd, raw) {
         name: ws.name,
         active: ws.active,
         status: ws.status,
+        milestone_shipped_unverified: ws.milestone_shipped_unverified,
         current_phase: ws.current_phase ?? null,
         phases: `${ws.completed_phases}/${ws.roadmap_phase_count}`,
         plans: `${ws.completed_plans}/${ws.total_plans}`,

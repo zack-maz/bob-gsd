@@ -38,7 +38,7 @@ const readline = require('node:readline');
 const { parseArgs } = require('../src/installer/args.cjs');
 const { resolveTarget } = require('../src/installer/scope.cjs');
 const { stage } = require('../src/installer/stage.cjs');
-const { mergeTextMode } = require('../src/installer/config-merge.cjs');
+const { mergeTextMode, unmergeOwnedKeys } = require('../src/installer/config-merge.cjs');
 const { newReport, printReport } = require('../src/installer/report.cjs');
 const {
   SCHEMA_VERSION,
@@ -149,10 +149,12 @@ function runInstall({ target, scope, explicitDir, dryRun }) {
   } else {
     console.log(
       'KNOWN-LIMITATION: no project .planning/ found at ' +
-        `${planningDir} — skipping the workflow.text_mode merge. text_mode is a ` +
-        'per-project guarantee written into <project>/.planning/config.json; the bob ' +
-        'runtime descriptor does NOT enforce it (run the install from a project root, ' +
-        'or it activates the first time you run GSD inside a project).',
+        `${planningDir} — skipping the config merge (workflow.text_mode, ` +
+        'workflow.use_worktrees, context_window). These are per-project guarantees ' +
+        'written into <project>/.planning/config.json; the bob runtime descriptor does ' +
+        'NOT enforce them. Re-run the install from each project root once it has a ' +
+        '.planning/ — without use_worktrees:false, /gsd-execute-phase refuses to ' +
+        'dispatch on Bob (no git-worktree isolation primitive).',
     );
   }
 
@@ -211,9 +213,9 @@ function runUninstall({ target, dryRun }) {
         report.removed.push(`${rel} (gsd slug un-merged)`);
         continue;
       }
-      // .planning/config.json — remove ONLY the gsd-owned key (workflow.text_mode),
-      // preserve every user key. A tiny inline JSON un-merge (NOT YAML), and the
-      // file is NEVER deleted (D-07). Anchored at workspaceRoot, not target.
+      // .planning/config.json — remove ONLY the adapter-owned keys, preserve every
+      // user key. A tiny inline JSON un-merge (NOT YAML), and the file is NEVER
+      // deleted (D-07). Anchored at workspaceRoot, not target.
       const cfgAbs = safeJoin(workspaceRoot, rel); // CR-01 containment guard
       let cfgRaw;
       try {
@@ -231,12 +233,11 @@ function runUninstall({ target, dryRun }) {
         report.skipped.push(`${rel} (unparseable — preserved)`);
         continue;
       }
-      if (cfg && typeof cfg === 'object' && cfg.workflow && typeof cfg.workflow === 'object') {
-        delete cfg.workflow.text_mode;
-        if (Object.keys(cfg.workflow).length === 0) delete cfg.workflow;
-      }
+      // Remove ONLY the adapter-owned keys (workflow.text_mode, workflow.use_worktrees,
+      // context_window) — the same set mergeTextMode seeds — and keep every user key.
+      unmergeOwnedKeys(cfg);
       if (!dryRun) fs.writeFileSync(cfgAbs, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
-      report.removed.push(`${rel} (workflow.text_mode un-merged)`);
+      report.removed.push(`${rel} (adapter-owned config keys un-merged)`);
       continue;
     }
 

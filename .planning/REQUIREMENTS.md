@@ -1,6 +1,6 @@
 # Requirements: GSD for IBM Bob (gsd-bob)
 
-**Defined:** 2026-06-17 (v1) · **Current milestone defined:** 2026-08-13 (v3.0)
+**Defined:** 2026-06-17 (v1) · **Current milestone defined:** 2026-08-13 (v3.0) · **Re-targeted:** 2026-09-16 (1.10.0 → 1.14.0; Bob 2.0.x-only)
 **Core Value:** A Bob user installs via a single command and runs the full GSD planning loop (new-project → plan-phase → execute-phase → verify) natively, producing the same `.planning/` artifacts GSD produces in Claude Code.
 
 Shipped requirement sets are archived, not repeated here:
@@ -8,18 +8,28 @@ v1 (30 reqs, Phases 1–6) and v2.0 (15 reqs, Phases 7–11) → [`milestones/v2
 
 ## Milestone v3.0 Requirements
 
-Re-baseline gsd-bob onto both upstreams at once: gsd-core `1.6.1 → 1.10.0` and Bob Shell `1.0.x → 2.x`.
-Grounded in [`research/v3.0-UPSTREAM-DELTA.md`](./research/v3.0-UPSTREAM-DELTA.md), where every claim below is sourced.
+Re-baseline gsd-bob onto both upstreams at once: gsd-core `1.6.1 → 1.14.0` and Bob `1.0.x → 2.0.x`.
+Grounded in the four 2026-09-16 research reports (`research/260916-gsd-core-1.14.0-delta.md`,
+`260916-bob-shell-docs.md`, `260916-bob-ide-docs.md`, `260916-bob-1.0.4-bundle.md`), which supersede
+the milestone-opening [`research/v3.0-UPSTREAM-DELTA.md`](./research/v3.0-UPSTREAM-DELTA.md).
+
+**Re-target (2026-09-16):** the milestone opened against gsd-core `1.10.0`. Upstream shipped
+1.11.0–1.14.0 before Phase 13 ran, so the target is **1.14.0** — the RESYNC requirements below are
+restated accordingly. The Bob target narrowed to **2.0.x only** (user decision): Bob Shell 1.0.x has
+no skills and no subagents, so only commands and the mode would load, and 2.0.0 requires a fresh
+install regardless.
 
 **Cross-cutting principles carried forward:** backend-neutrality (Bob owns model routing; zero brand
 literals in the descriptor and adapter), the capability-map flag-gap contract (parity-first — flag or
 skip, never silently break), `.planning/` root-anchoring, and byte-compatible Claude↔Bob artifact
 interchange.
 
-**Principle that CHANGES in v3.0:** the test-deferred model. A live Bob Shell 2.x install is now
-available, so success criteria are verified **empirically against real Bob** rather than by
-doc-conformance plus a deferred pass. Doc-derived defaults from v1/v2 are treated as hypotheses to
-confirm or refute, not as settled facts.
+**Principle that CHANGES in v3.0:** the test-deferred model. A live Bob Shell 2.0.1 install was
+available for Phase 12, so its criteria were verified **empirically against real Bob**, and
+doc-derived defaults from v1/v2 are treated as hypotheses to confirm or refute rather than settled
+facts. **Partially reverted 2026-09-16:** the dev machine now carries Bob Shell 1.0.4 (the
+unsupported generation), so Phase 13 was verified hermetically and the live-Bob run is deferred
+again to Phase 17.
 
 ### Bob 2.0 Capability Re-verification
 
@@ -33,15 +43,19 @@ Shell's.
 - [x] **BOB2-04**: The installer and adapter are correct for Bob 2.0's relocated settings (`~/.bob/settings/settings.json`) and consolidated Agent mode — no writes to paths 2.0 no longer reads, and the 2.0.1 approval rules for Bob-home writes are accounted for — *found and fixed a P0: global installs wrote a `custom_modes.yaml` Bob 2.0 never reads. Approval-prompt behaviour is an acceptance-UX observation (Phase 17)*
 - [x] **BOB2-05**: Subagent isolation and parallel fan-out are determined empirically on live Bob 2.x, replacing the doc-derived `parallelSubagentFanout` default with an observed value — *observed `true`; unblocks PAR-01*
 
-### gsd-core 1.10.0 Re-sync
+### gsd-core 1.14.0 Re-sync
 
-Bring the vendored payload forward four minor versions on one consistent version.
+Bring the vendored payload forward eight minor versions on one consistent version.
 
-- [ ] **RESYNC-01**: The vendored `gsd-core/` payload is fully replaced at `1.10.0` (workflows, templates, references, bin) — one consistent version, never a mixed payload
-- [ ] **RESYNC-02**: The six Bob deltas are re-applied via `apply-bob-patches.cjs` and the descriptor/converter/golden/equivalence suites pass, or each diff is updated with a recorded justification; `MAINTAINING.md` is corrected from the real 1.6.1 → 1.10.0 replay
-- [ ] **RESYNC-03**: The model-neutrality invariant is re-run over the 1.10.0 payload and holds at zero literals across the full emitted `.bob/` set, including model IDs added upstream since 1.6.1
-- [ ] **RESYNC-04**: The two commands added upstream since 1.6.1 (`next`, `onboard`) are put through the capability gate and vendored if supported, with `SUPPORT-ROSTER.md`, `COMMANDS.md`, and `README.md` regenerated from the gate rather than hand-edited
-- [ ] **NEUTRAL-04**: The emitted `.bob/` set names **no agent or assistant other than Bob**, and no emitted flow asks the user to choose a model or backend. This extends v2.0's NEUTRAL-03 (which forbade *model* literals) to **agent/product brand names and selection prompts**. Scoped to Phase 13 because the offending text lives in the vendored payload and flows through the converter — neutralizing 1.6.1 content would be discarded by the 1.10.0 re-vendor. Measured 2026-08-13 against the installed set: 18 emitted files mention one non-Bob agent, 12 another, 5 another, 5 another, 1 another; the surviving forms are external-runtime selector flags in `argument-hint` and body prose (e.g. `--<runtime>` reviewer/offload flags), one "…selects recommended defaults" self-reference, and one feature described as offloading to another product's cloud. Enforced by an invariant in the NEUTRAL-03 style (zero brand tokens across the emitted set), not by spot edits
+- [x] **RESYNC-01**: The vendored `gsd-core/` payload is fully replaced at `1.14.0` (workflows, templates, references, bin, contexts) — one consistent version, never a mixed payload
+- [x] **RESYNC-02**: The Bob deltas are re-applied via `apply-bob-patches.cjs` and the descriptor/converter/golden/equivalence suites pass, or each diff is updated with a recorded justification; `MAINTAINING.md` is corrected from the real 1.6.1 → 1.14.0 replay — *the six-delta model grew to **nine** (`VALID_CONVERTER_NAMES` allowlist, `.bob` resolver probes, the `.gsd-runtime` marker), the script gained a `preflight()` and a `verifyAll()` after its 4b anchor turned out to have been deleted upstream in 1.7.0, and the descriptor itself had to change (`localConfigDir`, `hostIntegration`, `version`, `engines` added; illegal `hookEvents` removed) to validate against 1.14.0's own validator*
+- [x] **RESYNC-03**: The model-neutrality invariant is re-run over the 1.14.0 payload and holds at zero literals across the full emitted `.bob/` set, including model IDs added upstream since 1.6.1
+- [x] **RESYNC-04**: The commands added upstream since 1.6.1 (`next`, `onboard`, `quick-batch`) are put through the capability gate and vendored if supported, with `SUPPORT-ROSTER.md`, `COMMANDS.md`, and `README.md` regenerated from the gate rather than hand-edited — *all three emit; 28 → 31, 0 unsupported*
+- [x] **RESYNC-05**: The installer seeds `workflow.use_worktrees: false` (alongside `text_mode` and `context_window`, un-merged on uninstall) and the payload ships the per-install `gsd-core/.gsd-runtime` marker, so 1.14.0's dispatch-isolation gate passes and the runtime ladder resolves `bob` — *without the seed, `execute-phase` exits `FATAL: runtime declares no executor-isolation primitive` on `dispatch.isolation: "none"`; without the marker every `dispatch-*` query answered for the `claude` descriptor. `.planning/config.json` deliberately gets no `runtime` key — it is the Claude↔Bob interchange surface*
+- [x] **RESYNC-06**: Global installs emit **absolute** `<target>/gsd-core/...` references — in both converted artifact sets and in the `gsd` mode's `customInstructions` shell-out — while local installs keep the workspace-relative `.bob/gsd-core/...` form; the `gsd_run` resolver preamble probes `<root>/.bob/gsd-core` and `$HOME/.bob/gsd-core` — *through v0.2.3 every install emitted the workspace-relative form, which does not exist under `~/.bob`, and the preamble had never probed `.bob` at all*
+*(NEUTRAL-04 is listed here for continuity; it now belongs to Phase 18.)*
+
+- [ ] **NEUTRAL-04**: The emitted `.bob/` set names **no agent or assistant other than Bob**, and no emitted flow asks the user to choose a model or backend. This extends v2.0's NEUTRAL-03 (which forbade *model* literals) to **agent/product brand names and selection prompts**. Originally scoped to Phase 13 because the offending text lives in the vendored payload and flows through the converter — neutralizing 1.6.1 content would have been discarded by the 1.14.0 re-vendor. Measured 2026-08-13 against the installed set: 18 emitted files mention one non-Bob agent, 12 another, 5 another, 5 another, 1 another; the surviving forms are external-runtime selector flags in `argument-hint` and body prose (e.g. `--<runtime>` reviewer/offload flags), one "…selects recommended defaults" self-reference, and one feature described as offloading to another product's cloud. Enforced by an invariant in the NEUTRAL-03 style (zero brand tokens across the emitted set), not by spot edits. **Deferred out of Phase 13 to its own Phase 18 (Phase 13 D-10, 2026-09-16):** fuzzy prose rewriting across 31 commands under a brand-new invariant is out of scope for a compatibility re-sync and is not required for 1.14.0 correctness. Recorded, not dropped — the 2026-08-13 measurement above still stands as the starting inventory, to be re-measured against the 1.14.0 emission first
 
 ### Native Bob 2.0 Surfaces
 
@@ -49,7 +63,7 @@ Adopt the surfaces that did not exist when v1 chose flag-and-skip. This retires 
 NATIVE-01 deferral: gaps that were flagged because Bob lacked the primitive now have real targets.
 
 - [ ] **NATIVE-02**: GSD's agent types are emitted as Bob agent personas under `.bob/agents/`, so subagent-dispatching workflows run as real isolated subagents instead of degrading to the inline fallback
-- [ ] **NATIVE-03**: gsd-core 1.10.0's runtime-aware subagent dispatch is configured for the `bob` runtime (dispatch type resolution + the agent-skills fallback for non-dispatchable runtimes), so workflows select the correct path without Bob-specific branching in workflow bodies
+- [ ] **NATIVE-03**: gsd-core 1.14.0's runtime-aware subagent dispatch is configured for the `bob` runtime (dispatch type resolution + the agent-skills fallback for non-dispatchable runtimes), so workflows select the correct path without Bob-specific branching in workflow bodies
 - [ ] **NATIVE-04**: Project context is emitted to Bob's `AGENTS.md` surface via an idempotent merge that never clobbers or duplicates user-authored content (same guarantee `custom_modes.yaml` already has)
 - [ ] **NATIVE-05**: Bob 2.0 lifecycle hooks are evaluated against GSD's state model and either adopted where they serve it, or flagged out with an explicit recorded reason
 
@@ -67,15 +81,15 @@ seam than artifact conversion, or a complement to it.
 Upstream's runtime architecture moved under gsd-bob's feet. Find out whether the vendored hand-edit
 is still necessary before committing to another version of it.
 
-- [ ] **DESC-01**: A spike determines whether the `bob` runtime can be expressed as an external/pluggable descriptor (`capability.json` + registry loading under 1.10.0's configHome trust gate), retiring the hand-edit to vendored `capability-registry.cjs` — delivered as a go/no-go with working evidence either way, not a migration
-- [ ] **UP-03**: `UPSTREAM.md` is rewritten against 1.10.0 — every file:line pointer re-verified, the converter framing updated for upstream's agent-converter descriptor cutover, and DESC-01's verdict recorded so a maintainer sees the current, not the 1.6.1, shape of the contribution
+- [ ] **DESC-01**: A spike determines whether the `bob` runtime can be expressed as an external/pluggable descriptor (`capability.json` + registry loading under 1.14.0's configHome trust gate), retiring the hand-edit to vendored `capability-registry.cjs` — delivered as a go/no-go with working evidence either way, not a migration — *answered **NO-GO** by Phase 13's delta research (§2.6): `capability-loader.cjs` would compose an external descriptor into `registry.runtimes.bob`, but every module that resolves a runtime `require`s the frozen `capability-registry.cjs` directly and never calls `loadRegistry`. What remains for Phase 16 is an upstream proposal to route `runtime-homes` / `runtime-artifact-layout` through the loader*
+- [x] **UP-03**: `UPSTREAM.md` is rewritten against 1.14.0 — every file:line pointer re-verified, the converter framing updated for upstream's generated-registry cutover, and DESC-01's verdict recorded so a maintainer sees the current, not the 1.6.1, shape of the contribution — *discharged in Phase 13: the inventory grew from 6 to 9 artifacts (adding the `VALID_CONVERTER_NAMES` entries, the resolver-preamble line and the runtime marker) and the contribution shape is restated as `capabilities/bob/capability.json` + a regenerated registry*
 
 ### Documentation & Live-Bob Acceptance
 
 Close the loop: docs regenerated for the new baseline, and the acceptance pass that v1 and v2 could
 only assemble finally executed.
 
-- [ ] **DOCS-05**: `README.md`, `ARCHITECTURE.md`, `COMMANDS.md`, `MAINTAINING.md`, and `SUPPORT-ROSTER.md` are regenerated/updated for Bob 2.0 + gsd-core 1.10.0 + the new surfaces, with generated artifacts still sourced from their generators rather than hand-edited
+- [x] **DOCS-05**: `README.md`, `ARCHITECTURE.md`, `COMMANDS.md`, `MAINTAINING.md`, and `SUPPORT-ROSTER.md` are regenerated/updated for Bob 2.0.x + gsd-core 1.14.0, with generated artifacts still sourced from their generators rather than hand-edited — *discharged in Phase 13, ahead of Phase 17; `UPSTREAM.md`, `.claude/CLAUDE.md` and the cover stamps were updated in the same pass. The Phase 14/15 surfaces are not documented because they are not built*
 - [ ] **DOCS-06**: Install and uninstall instructions are correct for Bob Shell 2.x, including the fresh-install requirement (no automated 1.0.x upgrade path) and any changed approval prompts
 - [ ] **ACCEPT-03**: The acceptance checklist is re-baselined for Bob 2.0 — steps whose expected output is 1.0.x-specific are amended deliberately (with the frozen-slice guard re-baselined in lockstep), and new surfaces are appended insert-only
 - [ ] **ACCEPT-04**: The full checklist is **run against live Bob 2.x** with pass/fail recorded per criterion — the deferred single pass, executed
@@ -90,7 +104,7 @@ Deferred beyond v3.0. Tracked but not in the current roadmap.
 - **LIFE-01**: `transition` lifecycle command — *last un-vendored member of the lifecycle cluster*
 - **SHAPE-01**: `ai-integration-phase` — *last un-vendored member of the phase-shaping cluster*
 - **AUTO-01**: Autonomy cluster (`autonomous`, `manager`, `workstreams`) ported to Bob
-- **PARITY-01**: Full parity with the upstream command set (71 at 1.10.0; 28 curated today)
+- **PARITY-01**: Full parity with the upstream command set (72 at 1.14.0; 31 curated today)
 
 ### Richer Native Integration
 
@@ -109,7 +123,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | Per-backend (Gemini/Claude/Granite) behavior tuning | Core is backend-agnostic; Bob owns routing |
 | Broad graceful-degradation as the porting philosophy | Parity-first (flag/skip gaps); only interactive prompts use text_mode out of necessity |
 | Full 71-command parity | Curated roster only; the long tail stays deferred (PARITY-01) |
-| Executing the upstream PR in v3.0 | v3.0 establishes what the contribution *is* post-1.10.0 (DESC-01/UP-03); the PR is MERGE-01 |
+| Executing the upstream PR in v3.0 | v3.0 establishes what the contribution *is* post-1.14.0 (DESC-01/UP-03); the PR is MERGE-01 |
 | Migrating to an external descriptor in v3.0 | DESC-01 is a spike with a go/no-go — committing to the migration before evidence would block the re-baseline |
 | Knowledge graph / mempalace | Subagent-heavy, off the core loop; deferred |
 | Bob IDE (as distinct from Bob Shell) | gsd-bob targets the Shell surface; IDE-only behavior is out of scope except where Shell docs are absent |
@@ -126,11 +140,13 @@ archived requirements file.
 | BOB2-03 | Phase 12 | Complete (in-session leg → ACCEPT-04) |
 | BOB2-04 | Phase 12 | Complete |
 | BOB2-05 | Phase 12 | Complete |
-| RESYNC-01 | Phase 13 | Pending |
-| RESYNC-02 | Phase 13 | Pending |
-| RESYNC-03 | Phase 13 | Pending |
-| RESYNC-04 | Phase 13 | Pending |
-| NEUTRAL-04 | Phase 13 | Pending |
+| RESYNC-01 | Phase 13 | Complete |
+| RESYNC-02 | Phase 13 | Complete |
+| RESYNC-03 | Phase 13 | Complete |
+| RESYNC-04 | Phase 13 | Complete |
+| RESYNC-05 | Phase 13 | Complete |
+| RESYNC-06 | Phase 13 | Complete |
+| NEUTRAL-04 | Phase 18 | Pending (moved out of Phase 13, D-10) |
 | NATIVE-02 | Phase 14 | Pending |
 | NATIVE-03 | Phase 14 | Pending |
 | NATIVE-04 | Phase 14 | Pending |
@@ -138,9 +154,9 @@ archived requirements file.
 | MCP-01 | Phase 15 | Pending |
 | MCP-02 | Phase 15 | Pending |
 | MCP-03 | Phase 15 | Pending |
-| DESC-01 | Phase 16 | Pending |
-| UP-03 | Phase 16 | Pending |
-| DOCS-05 | Phase 17 | Pending |
+| DESC-01 | Phase 16 | Answered NO-GO in Phase 13; upstream proposal pending |
+| UP-03 | Phase 13 | Complete (was Phase 16) |
+| DOCS-05 | Phase 13 | Complete (was Phase 17) |
 | DOCS-06 | Phase 17 | Pending |
 | ACCEPT-03 | Phase 17 | Pending |
 | ACCEPT-04 | Phase 17 | Pending |
@@ -148,10 +164,11 @@ archived requirements file.
 
 **Coverage:**
 
-- v3.0 requirements: 24 total (BOB2 5 + RESYNC 4 + NEUTRAL-04 + NATIVE 4 + MCP 3 + DESC/UP 2 + DOCS/ACCEPT 5 = 24) — all mapped to Phases 12–17; 24/24 mapped, no orphans
-- v3.0 complete: 5/24 (BOB2-01…05, Phase 12, 2026-08-13)
+- v3.0 requirements: **26** total (BOB2 5 + RESYNC 6 + NEUTRAL-04 + NATIVE 4 + MCP 3 + DESC/UP 2 + DOCS/ACCEPT 5 = 26) — all mapped to Phases 12–18; 26/26 mapped, no orphans. RESYNC grew from 4 to 6 (RESYNC-05, RESYNC-06 added 2026-09-16 for findings Phase 13 made rather than inherited)
+- v3.0 complete: **13/26** — BOB2-01…05 (Phase 12, 2026-08-13); RESYNC-01…06 + UP-03 + DOCS-05 (Phase 13, 2026-09-16)
+- v3.0 pending: 13/26 — NEUTRAL-04 (→ Phase 18), NATIVE-02…05 (Phase 14, blocked: personas undocumented), MCP-01…03 (Phase 15), DESC-01 (Phase 16, verdict recorded), DOCS-06 + ACCEPT-03…05 (Phase 17, blocked: no Bob 2.x on the dev device)
 - Shipped: v1 30/30 (Phases 1–6), v2.0 15/15 (Phases 7–11) — see the archive
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-08-13 — defined the 23 Milestone v3.0 requirements and mapped them to Phases 12–17 (BOB2→12, RESYNC→13, NATIVE→14, MCP→15, DESC/UP→16, DOCS/ACCEPT→17). Shipped v1/v2.0 rows live in `milestones/v2.0-REQUIREMENTS.md`.*
+*Last updated: 2026-09-16 — Phase 13 closed. RESYNC-01…04 re-targeted 1.10.0 → 1.14.0 and ticked; RESYNC-05 (worktree seed + runtime marker) and RESYNC-06 (absolute global refs) added for findings the phase made rather than inherited; UP-03 and DOCS-05 discharged early in Phase 13; DESC-01 answered NO-GO with evidence; NEUTRAL-04 moved to its own Phase 18. Shipped v1/v2.0 rows live in `milestones/v2.0-REQUIREMENTS.md`.*

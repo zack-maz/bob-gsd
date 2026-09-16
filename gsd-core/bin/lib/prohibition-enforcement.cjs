@@ -362,6 +362,93 @@ function childEnv() {
 const NODE_TEST_TIMEOUT_MS = 30_000;
 const ESLINT_TIMEOUT_MS = 60_000;
 const CHECK_MAX_BUFFER = 16 * 1024 * 1024;
+/** Windows `taskkill` resolved by ABSOLUTE path — never a bare PATH-resolved name. A project
+ * directory used as the child's `cwd` could otherwise contain a planted `taskkill.exe`/`.bat`
+ * that Windows executable resolution picks up ahead of the real one (#3660 review, minor-9).
+ * Returns null (never a hardcoded fallback, per tests/hardcoded-paths.test.cjs) when neither env
+ * var is set -- not expected on a real Windows host (both are set by the OS itself), but a
+ * hostile/stripped env should degrade to "skip the reap" rather than guess a system path. */
+function taskkillPath() {
+    const root = process.env.SystemRoot || process.env.windir;
+    return root ? node_path_1.default.join(root, 'System32', 'taskkill.exe') : null;
+}
+/**
+ * Reap the process TREE rooted at `pid` after THIS call's own bound killed it (#3660: `node --test`
+ * forks a per-file WORKER by default since Node 22 — `execFileSync`'s `timeout` signals only the
+ * direct child/runner, never the worker, which is reparented to PID 1 and can busy-loop forever).
+ *
+ * POSIX: the child was spawned `detached` (its own process group, pgid === pid), so `-pid` addresses
+ * the whole group. ESRCH (group already gone) is swallowed — the subject may have exited on its own
+ * between the timeout firing and this call.
+ *
+ * Windows has no process-group equivalent; `taskkill /PID <pid> /T /F` walks the live process tree by
+ * parent-PID instead, which does not require the parent PID to still be alive. A non-zero exit means
+ * "nothing left to kill" (already gone, or never had descendants) — not a failure, so it is never
+ * escalated; there is no portable stronger primitive to escalate TO.
+ *
+ * Never throws — this runs from a `catch`/`finally` path and must not itself become the error.
+ */
+function reapDescendants(pid) {
+    if (typeof pid !== 'number' || pid <= 0)
+        return; // defensive: never signal pid 0 (self) or negative
+    if (process.platform === 'win32') {
+        const exe = taskkillPath();
+        if (!exe)
+            return; // no safe absolute path available -- best-effort, skip rather than guess
+        try {
+            // 5s bound (DEFECT.UNBOUNDED-SUBPROCESS): a local OS command, not a network call -- if
+            // taskkill itself hangs, this function's own "never throws" contract already treats that
+            // identically to any other failure (swallowed below), so a bounded timeout costs nothing
+            // and just prevents a stuck taskkill from blocking the caller forever.
+            (0, node_child_process_1.spawnSync)(exe, ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 5_000 });
+        }
+        catch {
+            // best-effort: a missing taskkill.exe (or a timeout) is not this call's problem to escalate
+        }
+        return;
+    }
+    try {
+        process.kill(-pid, 'SIGKILL');
+    }
+    catch {
+        // Swallows ESRCH (group already gone -- nothing to reap) and any other errno (e.g. EPERM) --
+        // this helper never throws regardless of cause; see the function's own doc comment above.
+    }
+}
+/**
+ * `execFileSync`, with descendant reaping layered on top. Same contract (same return value, throws
+ * the identical error) EXCEPT that when — and ONLY when — this call's OWN timeout killed the child,
+ * any descendants the child forked are also reaped.
+ *
+ * Gated on `error.code === 'ETIMEDOUT'`, NOT `error.signal`. `signal` is the field Node's own docs
+ * describe for this purpose, but it is not reliably populated across platforms/Node versions: on one
+ * real Linux CI run (Node 24) a genuine timeout-kill threw `{ signal: null, code: 'ETIMEDOUT',
+ * status: 7 }` — `signal` was simply absent, `code` was the only reliable marker (confirmed empirically
+ * before landing this; a macOS/Node run separately showed `signal: 'SIGTERM'` for the identical
+ * scenario, so neither field alone is safe to rely on everywhere — `code` was the one constant).
+ * Gating strictly on the timeout code (rather than reaping on every throw) matters: an ordinary
+ * non-zero exit (a real test/lint failure) has no `ETIMEDOUT` code — the child exited on its own, so a
+ * reap there would fire on every red run for no reason and, on POSIX, risks signalling a process group
+ * whose pgid was *already* recycled by something unrelated in the time since (the #3660 review's
+ * Blocker-3 defect in the prior attempt at this fix, PR #3681). Only the timeout-kill path is targeted.
+ *
+ * Spawns `detached` on POSIX so the reap above can address the whole process group; omitted on
+ * Windows (no such flag there — `@types/node`'s `ExecFileSyncOptions` doesn't declare `detached`
+ * either, hence the cast below, though libuv honors it identically to `spawnSync`).
+ */
+function execFileSyncReaping(file, args, options) {
+    const spawnOptions = process.platform === 'win32' ? options : { ...options, detached: true };
+    try {
+        return (0, node_child_process_1.execFileSync)(file, args, spawnOptions);
+    }
+    catch (e) {
+        const err = e;
+        if (typeof err.pid === 'number' && err.code === 'ETIMEDOUT') {
+            reapDescendants(err.pid);
+        }
+        throw e;
+    }
+}
 /** Resolve the effective timeout: only a POSITIVE override is honored — `0` (which Node treats as
  * "no timeout") or a negative value falls back to the bounded default, so the subprocess is ALWAYS
  * bounded (a `timeoutMs: 0` injection can never disable the bound). */
@@ -378,7 +465,7 @@ function posTimeout(timeoutMs, def) {
  */
 function runNodeTestWithSubject(check, cwd, subject, timeoutMs) {
     try {
-        return (0, node_child_process_1.execFileSync)(process.execPath, buildNodeTestArgs(check), {
+        return execFileSyncReaping(process.execPath, buildNodeTestArgs(check), {
             cwd,
             encoding: 'utf-8',
             stdio: ['ignore', 'pipe', 'pipe'],
@@ -398,7 +485,7 @@ function defaultRunCheck(check, cwd, timeoutMs) {
         if (check.kind === 'node-test') {
             let out = '';
             try {
-                out = (0, node_child_process_1.execFileSync)(process.execPath, buildNodeTestArgs(check), {
+                out = execFileSyncReaping(process.execPath, buildNodeTestArgs(check), {
                     cwd,
                     encoding: 'utf-8',
                     stdio: ['ignore', 'pipe', 'pipe'],
@@ -422,7 +509,7 @@ function defaultRunCheck(check, cwd, timeoutMs) {
                 return { passed: false }; // eslint not installed -> fail closed, never throw
             let json = '';
             try {
-                json = (0, node_child_process_1.execFileSync)(process.execPath, [eslintCli, ...buildLintArgs(check)], {
+                json = execFileSyncReaping(process.execPath, [eslintCli, ...buildLintArgs(check)], {
                     cwd,
                     encoding: 'utf-8',
                     stdio: ['ignore', 'pipe', 'pipe'],
@@ -482,7 +569,7 @@ function defaultProveFailFirst(check, cwd, timeoutMs) {
                 return { provenFailFirst: false }; // eslint not installed -> fail closed, never throw
             let json = '';
             try {
-                json = (0, node_child_process_1.execFileSync)(process.execPath, [eslintCli, ...buildLintArgs({ ...check, target: fixture })], {
+                json = execFileSyncReaping(process.execPath, [eslintCli, ...buildLintArgs({ ...check, target: fixture })], {
                     cwd,
                     encoding: 'utf-8',
                     stdio: ['ignore', 'pipe', 'pipe'],
@@ -515,12 +602,12 @@ function defaultProveFailFirst(check, cwd, timeoutMs) {
             // a setup crash, not from the prohibition firing. Requiring the fixture to exist before spawning
             // closes the realistic typo/stale-path case (#1279 review, Major 1).
             //
-            // CAUSATION (#1346): existence + a non-vacuous red is necessary but not sufficient — a deceptive
-            // negative test that reds merely BECAUSE `GSD_PROHIB_SUBJECT` is set (rather than because the
-            // subject's CONTENT violates the must-NOT) would otherwise be accepted. The OPTIONAL `cleanFixture`
-            // control below proves content-dependence when supplied (red on bad AND green on clean). When NO
-            // clean fixture is authored the control cannot run, so the residual remains a documented constraint
-            // for that case (an author opts into the stronger proof by supplying a known-clean control subject).
+            // CAUSATION (#1346; MANDATORY as of #1906): existence + a non-vacuous red is necessary but not
+            // sufficient — a deceptive negative test that reds merely BECAUSE `GSD_PROHIB_SUBJECT` is set
+            // (rather than because the subject's CONTENT violates the must-NOT) would otherwise be accepted.
+            // The `cleanFixture` control below proves content-dependence (red on bad AND green on clean) and is
+            // now REQUIRED for the node-test kind: absent it, the check is un-provable (fail-closed), not
+            // accepted under the weaker violation-only proof (#1906 supersedes #1346's opt-in; ADR-1606 D4).
             // Resolve the fixture against `cwd` (NOT the verify process's cwd): the spawned test reads
             // `GSD_PROHIB_SUBJECT` and resolves a relative subject against `cwd`, so the existence check must
             // use the SAME base or it could pass here yet ENOENT in the child (re-opening the fail-open hole).
@@ -530,20 +617,22 @@ function defaultProveFailFirst(check, cwd, timeoutMs) {
             const redOut = runNodeTestWithSubject(check, cwd, fixture, timeoutMs);
             if (!isNonVacuousNodeTestRed(redOut, check.target))
                 return { provenFailFirst: false, method: 'violation-fixture' };
-            // #1346 CAUSATION CONTROL (optional): if a clean control subject is supplied, run the SAME test
-            // against it and require it to stay GREEN. This proves the red above was caused by the subject's
-            // CONTENT — a deceptive test that reds merely because GSD_PROHIB_SUBJECT is SET reds here too →
-            // not content-dependent → not proven. Absent → no control (documented residual; backward-compat).
+            // #1906 CAUSATION CONTROL (MANDATORY for node-test — supersedes #1346's opt-in, ADR-1606 D4): the
+            // clean control subject is REQUIRED. Run the SAME test against it and require it to stay GREEN,
+            // proving the red above was caused by the subject's CONTENT — a deceptive test that reds merely
+            // because GSD_PROHIB_SUBJECT is SET reds here too → not content-dependent → not proven. ABSENT →
+            // the control cannot run → un-provable → fail-closed (NOT accepted under the weaker violation-only
+            // proof). This is the one behavior change vs #1346: absent `cleanFixture` was previously proven.
             const clean = check.cleanFixture;
-            if (clean) {
-                // A supplied-but-missing/typo'd control path can't run the control → fail-closed, symmetric
-                // with the violation-fixture existence guard (resolve against the SAME `cwd` as the child).
-                if (!node_fs_1.default.existsSync(node_path_1.default.resolve(cwd, clean)))
-                    return { provenFailFirst: false, method: 'violation-fixture' };
-                const cleanOut = runNodeTestWithSubject(check, cwd, clean, timeoutMs);
-                if (!isNonVacuousNodeTestPass(cleanOut, check.target))
-                    return { provenFailFirst: false, method: 'violation-fixture' };
-            }
+            if (!clean)
+                return { provenFailFirst: false, method: 'violation-fixture' };
+            // A supplied-but-missing/typo'd control path can't run the control → fail-closed, symmetric
+            // with the violation-fixture existence guard (resolve against the SAME `cwd` as the child).
+            if (!node_fs_1.default.existsSync(node_path_1.default.resolve(cwd, clean)))
+                return { provenFailFirst: false, method: 'violation-fixture' };
+            const cleanOut = runNodeTestWithSubject(check, cwd, clean, timeoutMs);
+            if (!isNonVacuousNodeTestPass(cleanOut, check.target))
+                return { provenFailFirst: false, method: 'violation-fixture' };
             return { provenFailFirst: true, method: 'violation-fixture' };
         }
         // Unknown kind — defensive; the LOCATE guard already rejects it.

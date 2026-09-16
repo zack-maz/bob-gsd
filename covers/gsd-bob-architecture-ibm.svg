@@ -43,7 +43,7 @@
 
   <rect class="pill" x="560" y="32" width="360" height="40"/>
   <text x="740" y="57" text-anchor="middle" class="mono" fill="#f4f4f4" font-size="12.5">npx @zack-maz/gsd-bob --bob --local</text>
-  <text x="920" y="92" text-anchor="end" class="mut" font-size="12">MIT · <tspan data-stamp="version" font-weight="600">v0.2.3</tspan> · --local project · --global machine</text>
+  <text x="920" y="92" text-anchor="end" class="mut" font-size="12">MIT · <tspan data-stamp="version" font-weight="600">v0.3.0</tspan> · --local project · --global machine</text>
 
   <line class="rule" x1="40" y1="112" x2="920" y2="112"/>
 
@@ -103,7 +103,7 @@
 
   <!-- ===== CAPABILITY ===== -->
   <text x="40" y="542" class="lbl" font-size="12">WHAT BOB CAN RUN</text>
-  <text x="40" y="572" class="hero"><tspan data-stamp="emitted">28</tspan> commands emitted · <tspan data-stamp="withheld">0</tspan> withheld</text>
+  <text x="40" y="572" class="hero"><tspan data-stamp="emitted">31</tspan> commands emitted · <tspan data-stamp="withheld">0</tspan> withheld</text>
   <text x="420" y="572" class="mut" font-size="12">roster generated from the capability gate, never hand-kept</text>
 
   <!-- supported chips -->
