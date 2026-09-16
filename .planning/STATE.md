@@ -224,8 +224,8 @@ Also read: `13-REVENDOR-NOTES.md` (the real replay log + every golden justificat
 
 ## Operator Next Steps
 
-- **Review the Phase 13 branch** (`update/bob-latest-gsd-core`, six local commits ending in `chore(release): v0.3.0`) and decide on tag / push / `npm publish` (npm login is required on this machine — `npm whoami` returned E401)
-- **Publish 0.3.0** — the RESYNC-06 global-path fix and the `use_worktrees` seed both affect real installs (without the seed, `/gsd-execute-phase` is dead on 1.14.0); npm still serves 0.2.2 (0.2.3 was never published)
+- **Releases:** `v0.3.0` (gsd-core 1.14.0 re-sync) is published on npm and merged via PR #1; `v0.4.0` (NEUTRAL-04: Bob-only runtime docs, 200k context floor, `resolve_model_ids: omit`) is committed, tagged and pushed to `main` — `npm publish` for 0.4.0 is run by the operator (interactive npm auth)
+- **After 0.4.0 lands on npm**, re-run the installer in every project (`npx -y --package=@zack-maz/gsd-bob@latest -- gsd-bob --bob --local`) — the emitted artifacts changed materially (neutralized prose, Bob-resolved paths, new seeds)
 - **Get a Bob 2.0.x install back on the device** to unblock Phase 17 / ACCEPT-04. The current Bob Shell is 1.0.4, which gsd-bob does not support
 - **Re-install gsd-bob into the live `~/.bob` once Bob 2.x is back** — the existing global install predates both the BOB2-04 modes-path fix and the RESYNC-06 absolute-path fix: `node bin/gsd-bob.cjs --bob --global`. Expect a Bob-home approval prompt (2.0.1+ never auto-approves `~/.bob` writes)
 - `/gsd-plan-phase 18` for NEUTRAL-04, or `/gsd-plan-phase 15` for the MCP seam — those are the two unblocked phases
