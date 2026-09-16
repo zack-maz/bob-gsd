@@ -247,9 +247,13 @@ function isModesRelPath(relPath) {
  * (D-03): it points users at the /gsd-* slash commands and notes that planning
  * artifacts live in .planning/ and that the mode shells out via the execute tool.
  *
+ * @param {{gsdCoreDir?: string}} [opts]  where THIS install put the vendored
+ *   `gsd-core/` (workspace-relative `.bob/gsd-core` for a local install, the
+ *   absolute `<target>/gsd-core` for a global one). Defaults to the local form.
  * @returns {{slug:string,name:string,roleDefinition:string,whenToUse:string,customInstructions:string,groups:string[]}}
  */
-function emitGsdMode() {
+function emitGsdMode({ gsdCoreDir = path.join('.bob', 'gsd-core') } = {}) {
+  const shim = path.join(gsdCoreDir, 'bin', 'gsd-tools.cjs');
   return {
     slug: 'gsd',
     name: 'GSD',
@@ -264,7 +268,7 @@ function emitGsdMode() {
       'specific workflow.',
     customInstructions:
       'All planning state lives under .planning/. Run GSD tooling by shelling out via ' +
-      'the execute tool (e.g. `node gsd-core/bin/gsd-tools.cjs query ...`). Prefer the ' +
+      `the execute tool (e.g. \`node ${shim} query ...\`). Prefer the ` +
       '/gsd-* slash commands as entry points; never edit .planning/ artifacts outside a ' +
       'GSD workflow unless explicitly asked.',
     groups: ['read', 'edit', 'execute', 'mcp'],

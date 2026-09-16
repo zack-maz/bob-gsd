@@ -36,24 +36,40 @@ const {
 const { sha256, safeJoin, classifyOnUpdate, classifyOrphan } = require('./manifest.cjs');
 
 /**
- * Representative candidate set for the support roster. Mirrors
- * scripts/generate-support-roster.cjs — the roster is GENERATED from the gate,
- * never hand-maintained (T-02-10). Full-roster generation across the whole GSD
- * skill set rides with Phases 4-5; the convertible loop below scales to it with
- * zero changes here.
+ * Candidate set for the STAGED support roster — DERIVED from the same
+ * `commands/gsd/*.md` source set the convertible loop below iterates, exactly as
+ * scripts/generate-support-roster.cjs derives the repo-root roster, so the two
+ * can never disagree. The roster is GENERATED from the gate, never
+ * hand-maintained (T-02-10). Falls back to an empty set when the source dir is
+ * absent (the empty-roster regression stays a clean no-op).
  *
- * BOB2-05: the synthetic `gsd-parallel-fanout` exemplar was removed. It existed
- * only to keep the gate's skip path visible while fan-out was assumed missing;
- * now that Bob supports fan-out it would gate SUPPORTED and appear in the roster
- * as an emitted skill that no source file produces. The gate's flag/skip path is
- * covered where it belongs — test/unsupported-gate.test.cjs and
- * test/bob2-capability.test.cjs — not by a fake roster row.
+ * BOB2-05: no synthetic exemplar rows — the gate's flag/skip path is covered by
+ * test/unsupported-gate.test.cjs and test/bob2-capability.test.cjs, not by a
+ * fake roster row.
  */
-const ROSTER_CANDIDATES = [
-  { name: 'gsd-help', requires: [] },
-  { name: 'gsd-plan-phase', requires: [] },
-  { name: 'gsd-execute-phase', requires: [] },
-];
+function rosterCandidates(repoRoot) {
+  const src = path.join(repoRoot, 'commands', 'gsd');
+  if (!fs.existsSync(src)) return [];
+  return fs
+    .readdirSync(src)
+    .filter((f) => f.endsWith('.md'))
+    .sort()
+    .map((f) => ({ name: `gsd-${path.basename(f, '.md')}`, requires: [] }));
+}
+
+/**
+ * Rewrite the converter's global-home form (`~/.bob/...`, bare `~/.bob`) to the
+ * absolute install target. Pure string → string; linear, ReDoS-safe. The bare
+ * form is handled AFTER the slash form so a path is never double-rewritten.
+ * @param {string} content  converted artifact text (global scope)
+ * @param {string} target   absolute install target (the `.bob` home)
+ */
+function absolutizeGlobalHome(content, target) {
+  const abs = target.replace(/[\\/]+$/, '');
+  return content
+    .replace(/~\/\.bob\//g, `${abs}/`)
+    .replace(/~\/\.bob\b/g, abs);
+}
 
 /** Recursively list every FILE under `dir` as a path relative to `dir`. */
 function listFilesRel(dir) {
@@ -75,11 +91,11 @@ function listFilesRel(dir) {
  * Build the SUPPORT-ROSTER.md body from the adapter gate (never hand-maintained).
  * Mirrors scripts/generate-support-roster.cjs.
  */
-function renderRoster() {
-  const supported = ROSTER_CANDIDATES.filter(
+function renderRoster(candidates) {
+  const supported = candidates.filter(
     (c) => gateArtifact(c, BOB_CAPABILITY_DECL).supported,
   ).map((c) => c.name);
-  const unsupportedLines = buildSupportRoster(ROSTER_CANDIDATES, BOB_CAPABILITY_DECL);
+  const unsupportedLines = buildSupportRoster(candidates, BOB_CAPABILITY_DECL);
 
   const header =
     '# Bob Support Roster\n\n' +
@@ -89,10 +105,10 @@ function renderRoster() {
     '`unsupported on Bob: <reason>` line (D-10, parity-first).\n';
   const supportedSection = supported.length
     ? supported.map((n) => `- ${n}`).join('\n')
-    : '_(none in the representative set)_';
+    : '_(none in the candidate set)_';
   const unsupportedSection = unsupportedLines.length
     ? unsupportedLines.map((l) => `- ${l}`).join('\n')
-    : '_(none unsupported in the representative set)_';
+    : '_(none unsupported in the candidate set)_';
   return (
     `${header}\n` +
     '## Supported (emitted to `.bob/commands` / `.bob/skills`)\n\n' +
@@ -199,7 +215,12 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
   } catch (err) {
     if (!err || err.code !== 'ENOENT') throw err;
   }
-  const mergedModes = mergeCustomModes(existingModes, emitGsdMode());
+  // The mode's shell-out instruction names the shim where THIS install put it:
+  // workspace-relative for a local install, absolute for a global one (a
+  // `.bob/...` relative path does not exist under `~/.bob`).
+  const isGlobal = scope === 'global';
+  const gsdCoreDir = isGlobal ? path.join(target, 'gsd-core') : path.join('.bob', 'gsd-core');
+  const mergedModes = mergeCustomModes(existingModes, emitGsdMode({ gsdCoreDir }));
   const mergedBytes = Buffer.from(mergedModes);
   emittedThisRun.add(modesRel);
   // Track the containing dir so an installer-created `settings/` is swept on
@@ -228,32 +249,28 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
     stageFile(destRel, bytes);
   }
 
-  // ---- Structural piece 2b: gsd-core SIBLINGS the vendored shim eagerly needs -
-  // The vendored gsd-core eagerly requires two files that resolve to SIBLINGS of
-  // gsd-core/ (three `../` up from gsd-core/bin/lib/): scripts/fix-slash-commands.cjs
-  // (command-roster.cjs) and package.json (runtime-artifact-conversion.cjs, read as
-  // pkg.version). Without them, `node .bob/gsd-core/bin/gsd-tools.cjs query …` crashes
-  // out of tree with `Cannot find module '../../../scripts/fix-slash-commands.cjs'`.
-  // Both are sourced from repoRoot (the SAME root as the gsd-core/ payload, NEVER
-  // cwd/workspaceRoot) and staged through stageFile() so they are manifest-tracked
-  // (sha256 + path), obey the D-04 collision policy, and are swept on uninstall
+  // ---- Structural piece 2b: the ONE gsd-core SIBLING the vendored shim eagerly needs
+  // The vendored gsd-core eagerly requires scripts/fix-slash-commands.cjs, resolved
+  // as a SIBLING of gsd-core/ (three `../` up from gsd-core/bin/lib/, via
+  // command-roster.cjs). Without it `node .bob/gsd-core/bin/gsd-tools.cjs query …`
+  // crashes out of tree with `Cannot find module '../../../scripts/fix-slash-commands.cjs'`.
+  // It is sourced from repoRoot (the SAME root as the gsd-core/ payload, NEVER
+  // cwd/workspaceRoot) and staged through stageFile() so it is manifest-tracked
+  // (sha256 + path), obeys the D-04 collision policy, and is swept on uninstall
   // (INSTALL-05) — no special-casing outside the manifest.
+  //
+  // The synthetic sibling `package.json` gsd-bob used to stage is GONE: since
+  // gsd-core 1.7.0 (#1383) `resolveVersionFrom` reads `gsd-core/VERSION` first and
+  // every remaining `../../../package.json` require in the shim is lazy + try/catch.
+  // The payload's own VERSION (written by scripts/apply-bob-patches.cjs) and the
+  // per-install `.gsd-runtime` marker beside it are what the shim reads.
   stageFile(
     path.join('scripts', 'fix-slash-commands.cjs'),
     fs.readFileSync(path.join(repoRoot, 'scripts', 'fix-slash-commands.cjs')),
   );
-  // Synthesize a MINIMAL package.json stamping the VENDORED gsd-core version
-  // (gsd-core/VERSION → 1.6.1), NOT gsd-bob's own 0.1.0. This is the file
-  // runtime-artifact-conversion.cjs reads as pkg.version to write `version:` into
-  // converted-artifact frontmatter, so it must reflect the vendored payload.
-  const vendoredVersion = fs.readFileSync(path.join(repoRoot, 'gsd-core', 'VERSION'), 'utf8').trim();
-  stageFile(
-    'package.json',
-    Buffer.from(`${JSON.stringify({ name: '@opengsd/gsd-core', version: vendoredVersion }, null, 2)}\n`),
-  );
 
   // ---- Structural piece 3: SUPPORT-ROSTER.md (regenerated via the gate) -----
-  stageFile('SUPPORT-ROSTER.md', Buffer.from(renderRoster()));
+  stageFile('SUPPORT-ROSTER.md', Buffer.from(renderRoster(rosterCandidates(repoRoot))));
 
   // ---- Convertible-artifact loop (D-08, roster-agnostic) -------------------
   // Each Claude command source under repoRoot/commands/gsd/ is run through the
@@ -275,6 +292,14 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
       convertClaudeCommandToBobCommand,
       convertClaudeCommandToBobSkill,
     } = require(path.join(repoRoot, 'gsd-core', 'bin', 'lib', 'runtime-artifact-conversion.cjs'));
+    // Scope-aware emission: the converters map the Claude config home to `.bob/`
+    // (workspace-relative) for a LOCAL install and to `~/.bob/` for a GLOBAL one;
+    // the global form is then rewritten to the ABSOLUTE install target, because
+    // Bob's file tools take paths literally (no `~` expansion is documented) and a
+    // workspace-relative `.bob/gsd-core/...` does not exist under `~/.bob`.
+    const finish = (converted) => neutralizeModelReferences(
+      isGlobal ? absolutizeGlobalHome(converted, target) : converted,
+    );
     for (const rel of listFilesRel(convertibleSrc)) {
       const stem = path.basename(rel, path.extname(rel));
       const name = `gsd-${stem}`;
@@ -287,12 +312,12 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
         // stage.cjs calls the adapter, never inlines the rewrite.
         stageFile(
           path.join('commands', `${name}.md`),
-          Buffer.from(neutralizeModelReferences(convertClaudeCommandToBobCommand(content, name))),
+          Buffer.from(finish(convertClaudeCommandToBobCommand(content, name, isGlobal))),
         );
         // Nested skill (gsd- prefix) at skills/<name>/SKILL.md — same post-pass.
         stageFile(
           path.join('skills', name, 'SKILL.md'),
-          Buffer.from(neutralizeModelReferences(convertClaudeCommandToBobSkill(content, name))),
+          Buffer.from(finish(convertClaudeCommandToBobSkill(content, name, null, null, isGlobal))),
         );
       }
       // Unsupported candidates are surfaced through the roster (already rendered
@@ -349,4 +374,4 @@ function stage({ target, scope, workspaceRoot, dryRun = false, manifest, report,
   }
 }
 
-module.exports = { stage };
+module.exports = { stage, absolutizeGlobalHome, rosterCandidates };

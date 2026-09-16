@@ -35,9 +35,12 @@
 - gsd-mvp-phase
 - gsd-new-milestone
 - gsd-new-project
+- gsd-next
+- gsd-onboard
 - gsd-pause-work
 - gsd-plan-phase
 - gsd-progress
+- gsd-quick-batch
 - gsd-quick
 - gsd-resume-work
 - gsd-secure-phase

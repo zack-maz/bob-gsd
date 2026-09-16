@@ -35,14 +35,35 @@ const path = require('node:path');
 const BOB_CONTEXT_WINDOW = 270000;
 
 /**
+ * The config keys this adapter OWNS in `.planning/config.json` — seeded by
+ * mergeTextMode on every install and un-merged (removed, never the whole file)
+ * by uninstall. Every entry is a Bob runtime constant, not a user preference:
+ *
+ *   workflow.text_mode      Bob has no structured-choice prompt primitive.
+ *   workflow.use_worktrees  Bob has no git-worktree isolation primitive. Since
+ *                           gsd-core 1.14.0 the execute-phase / quick-batch
+ *                           dispatch gate refuses to run on a runtime whose
+ *                           descriptor declares `dispatch.isolation: "none"`
+ *                           unless this is `false` — executors then run
+ *                           sequentially in the main checkout, which is exactly
+ *                           how they ran under 1.6.1 (the gate is new, the
+ *                           behaviour is not).
+ *   context_window          Bob's real 270k runtime window (see above).
+ */
+const BOB_OWNED_CONFIG = Object.freeze({
+  workflow: Object.freeze({ text_mode: true, use_worktrees: false }),
+  context_window: BOB_CONTEXT_WINDOW,
+});
+
+/**
  * Merge `workflow.text_mode:true` + top-level `context_window` into the
  * root-anchored .planning/config.json.
  *
  * Behavior:
  *   - missing config.json            → create
- *                                      `{ workflow: { text_mode: true }, context_window: 270000 }`
- *   - existing config with user keys → preserve them, set workflow.text_mode:true
- *                                      and context_window:270000
+ *                                      `{ workflow: { text_mode: true, use_worktrees: false },
+ *                                         context_window: 270000 }`
+ *   - existing config with user keys → preserve them, set the BOB_OWNED_CONFIG keys
  *   - non-object workflow value      → coerce to a fresh object, then set the key
  *   - re-run                         → byte-identical (idempotent)
  *   - UNPARSEABLE config.json        → warn (naming the path) + return WITHOUT
@@ -93,14 +114,15 @@ function mergeTextMode(workspaceRoot, { dryRun = false } = {}) {
     cfg.workflow && typeof cfg.workflow === 'object' && !Array.isArray(cfg.workflow)
       ? cfg.workflow
       : {};
-  cfg.workflow.text_mode = true;
+  for (const [key, value] of Object.entries(BOB_OWNED_CONFIG.workflow)) {
+    cfg.workflow[key] = value;
+  }
 
   // Seed Bob's real context window unconditionally — it is a runtime constant the
-  // adapter owns (exactly like text_mode). Bob spawns isolated subagents
-  // sequentially (no documented parallel fan-out), so the whole loop effectively
-  // shares one window, and gsd-core's read-depth/advisory scaling must key on
-  // Bob's true 270k rather than the conservative 200k default.
-  cfg.context_window = BOB_CONTEXT_WINDOW;
+  // adapter owns (exactly like text_mode). The GSD loop shares one window in the
+  // common case, so gsd-core's read-depth/advisory scaling must key on Bob's
+  // true 270k rather than the conservative 200k default.
+  cfg.context_window = BOB_OWNED_CONFIG.context_window;
 
   // Byte-stable serialization so the manifest hash is reproducible across runs.
   const bytes = JSON.stringify(cfg, null, 2) + '\n';
@@ -114,4 +136,23 @@ function mergeTextMode(workspaceRoot, { dryRun = false } = {}) {
   return { written: true, path: planningCfg, bytes };
 }
 
-module.exports = { mergeTextMode, BOB_CONTEXT_WINDOW };
+/**
+ * Remove ONLY the adapter-owned keys from a parsed config object (uninstall
+ * un-merge). Every user key is preserved; an emptied `workflow` object is
+ * dropped. Pure — the caller owns the read/parse/write and the never-clobber
+ * rule for an unparseable file.
+ *
+ * @param {object} cfg  parsed .planning/config.json
+ * @returns {object} the same object, mutated
+ */
+function unmergeOwnedKeys(cfg) {
+  if (!cfg || typeof cfg !== 'object') return cfg;
+  if (cfg.workflow && typeof cfg.workflow === 'object' && !Array.isArray(cfg.workflow)) {
+    for (const key of Object.keys(BOB_OWNED_CONFIG.workflow)) delete cfg.workflow[key];
+    if (Object.keys(cfg.workflow).length === 0) delete cfg.workflow;
+  }
+  delete cfg.context_window;
+  return cfg;
+}
+
+module.exports = { mergeTextMode, unmergeOwnedKeys, BOB_CONTEXT_WINDOW, BOB_OWNED_CONFIG };
