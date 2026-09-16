@@ -1,7 +1,27 @@
 {
   "name": "@zack-maz/gsd-bob",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "GSD for IBM Bob — a standalone, installable adapter that runs the open-gsd spec-driven planning framework natively inside IBM Bob.",
+  "keywords": [
+    "ibm-bob",
+    "bob",
+    "gsd",
+    "open-gsd",
+    "gsd-core",
+    "spec-driven-development",
+    "planning",
+    "ai-coding-agent",
+    "installer"
+  ],
+  "homepage": "https://github.com/zack-maz/bob-gsd#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zack-maz/bob-gsd.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zack-maz/bob-gsd/issues"
+  },
+  "author": "Zack Maz",
   "license": "MIT",
   "bin": {
     "gsd-bob": "bin/gsd-bob.cjs"
@@ -13,11 +33,15 @@
     "commands/",
     "scripts/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md"
   ],
   "engines": {
     "node": ">=22.15.0",
     "npm": ">=10.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.cjs\""
