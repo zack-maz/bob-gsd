@@ -1,6 +1,6 @@
 <svg viewBox="0 0 960 960" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
   <title id="t">gsd-bob architecture, IBM Carbon themed</title>
-  <desc id="d">One command installs GSD, an open-source planning framework for AI coding agents, into IBM Bob: gsd-core Claude-format commands are transformed by the bob adapter's converters and capability gate into Bob-native commands and skills. 28 commands are emitted and 1 withheld, isolated subagents are confirmed, and the six-artifact move upstream into gsd-core 1.6.1 is four parts data, two parts new code.</desc>
+  <desc id="d">One command installs GSD, an open-source planning framework for AI coding agents, into IBM Bob: gsd-core's upstream-format commands are transformed by the bob adapter's converters and capability gate into Bob-native commands and skills. 28 commands are emitted and 1 withheld, isolated subagents are confirmed, and the six-artifact move upstream into gsd-core 1.6.1 is four parts data, two parts new code.</desc>
   <style>
     .bg{fill:#ffffff;}
     .panel{fill:#f4f4f4;stroke:#e0e0e0;stroke-width:1;}
@@ -43,7 +43,7 @@
 
   <rect class="pill" x="560" y="32" width="360" height="40"/>
   <text x="740" y="57" text-anchor="middle" class="mono" fill="#f4f4f4" font-size="12.5">npx @zack-maz/gsd-bob --bob --local</text>
-  <text x="920" y="92" text-anchor="end" class="mut" font-size="12">MIT · <tspan data-stamp="version" font-weight="600">v0.3.0</tspan> · --local project · --global machine</text>
+  <text x="920" y="92" text-anchor="end" class="mut" font-size="12">MIT · <tspan data-stamp="version" font-weight="600">v0.4.0</tspan> · --local project · --global machine</text>
 
   <line class="rule" x1="40" y1="112" x2="920" y2="112"/>
 
@@ -62,7 +62,7 @@
   <rect class="white" x="40" y="264" width="272" height="224"/>
   <rect class="bar" x="40" y="264" width="272" height="4"/>
   <text x="58" y="292" class="lbl" font-size="12">STAGE 1 · SOURCE</text>
-  <text x="58" y="318" class="ink" font-size="16" font-weight="700">gsd-core Claude commands</text>
+  <text x="58" y="318" class="ink" font-size="16" font-weight="700">gsd-core upstream commands</text>
   <line class="rule" x1="58" y1="332" x2="294" y2="332"/>
   <text x="58" y="358" class="mut mono" font-size="12">commands/gsd/*.md</text>
   <text x="58" y="380" class="mut mono" font-size="12">agents/*.md</text>
@@ -76,11 +76,11 @@
   <text x="362" y="292" class="lbl" font-size="12" fill="#0f62fe">STAGE 2 · TRANSFORM · NET-NEW</text>
   <text x="362" y="318" class="ink" font-size="16" font-weight="700">bob-adapter.cjs</text>
   <line class="rule" x1="362" y1="332" x2="598" y2="332"/>
-  <text x="362" y="358" class="ink mono" font-size="12">convertClaudeCmdToBobCommand()</text>
-  <text x="362" y="380" class="ink mono" font-size="12">convertClaudeCmdToBobSkill()</text>
+  <text x="362" y="358" class="ink mono" font-size="12">command converter → .bob/commands</text>
+  <text x="362" y="380" class="ink mono" font-size="12">skill converter → .bob/skills</text>
   <text x="362" y="402" class="ink mono" font-size="12">gateArtifact()</text>
   <line class="rule" x1="362" y1="420" x2="598" y2="420"/>
-  <text x="362" y="444" class="blue" font-size="12.5" font-weight="600">0 model-brand literals,</text>
+  <text x="362" y="444" class="blue" font-size="12.5" font-weight="600">0 agent/model brand names,</text>
   <text x="362" y="462" class="mut" font-size="12.5">enforced by a build-time test.</text>
 
   <!-- Stage 3 -->
@@ -139,7 +139,7 @@
     <rect class="white" x="60" y="652" width="500" height="52"/>
     <rect class="grn" x="72" y="668" width="8" height="18"/>
     <text x="88" y="675" class="ink" font-size="13.5" font-weight="600">Byte-identical .planning/ artifacts</text>
-    <text x="88" y="693" class="mut" font-size="12">interchangeable with Claude Code and every other GSD runtime</text>
+    <text x="88" y="693" class="mut" font-size="12">interchangeable with every other GSD runtime</text>
 
     <rect class="white" x="576" y="652" width="324" height="52"/>
     <rect class="grn" x="588" y="668" width="8" height="18"/>

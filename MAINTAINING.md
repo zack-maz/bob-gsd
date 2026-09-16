@@ -24,7 +24,7 @@ The tracked `gsd-core/` tree is **not** the pristine npm tarball. It is:
 ```
 pristine @opengsd/gsd-core tarball
   + colon→hyphen normalization pass          (over the .md doc tree)            [delta 1]
-  + ~/.claude → $HOME/.claude normalization  (over the .md doc tree)            [delta 2]
+  + upstream dot-home path normalization     (over the .md doc tree)            [delta 2]
   + the "bob" runtime registry block         (bin/lib/capability-registry.cjs)  [delta 3]
   + the Bob converter block + 3 exports      (bin/lib/runtime-artifact-conversion.cjs) [delta 4]
   + both runtime aliases                     (manifest JSON + FALLBACK_ALIASES) [delta 5a/5b]
@@ -37,8 +37,8 @@ pristine @opengsd/gsd-core tarball
 A naive "nuke and restage the raw tarball" drops every one of those and leaves the payload
 broken under Bob: the colon command form leaks back in, `stage.cjs` destructures missing
 converters, the registry-driven staging path refuses the converters it *does* find, workflow
-bash cannot locate the shim, and every `dispatch-*` query answers for the **`claude`**
-descriptor. The bump procedure is therefore: **nuke → restage the clean tarball → re-run
+bash cannot locate the shim, and every `dispatch-*` query answers for the **reference
+runtime's** descriptor. The bump procedure is therefore: **nuke → restage the clean tarball → re-run
 `scripts/apply-bob-patches.cjs` → validate.** The script is idempotent by design, so the whole
 thing is replayable.
 
@@ -114,7 +114,7 @@ for d in bin contexts references templates workflows; do test -d "gsd-core/$d"; 
 
 **Do this before the patch run**, in lockstep with the payload — the 1.14.0 run moved it here
 and it belongs here. The `commands/gsd/*.md` sources feed nothing inside the patch script, but
-they *are* the conversion source of truth (D-03: the curated Claude command sources, not
+they *are* the conversion source of truth (D-03: the curated upstream command sources, not
 upstream's pre-hyphenated `skills/`), and leaving them at `<old>` while the payload moves to
 `<new>` is exactly the version-mix the nuke-and-restage exists to prevent. 15 of the 28 curated
 sources had drifted across the eight-version jump.
@@ -179,12 +179,18 @@ applied, `[8]` 115 files changed (114 now probing `.bob`), `[9]` wrote `bob`,
 - **`verifyAll()`** re-checks all nine deltas after the run and throws on any gap: VERSION
   content, the `"bob"` entry plus its required `runtime` fields, the converter block and its
   three exports, both aliases, both allowlist entries, a `.bob` probe in **every** doc file
-  carrying `_gsd_at`, no surviving `~/.claude`, and the `.gsd-runtime` marker.
+  carrying `_gsd_at`, no surviving upstream tilde-home form, and the `.gsd-runtime` marker.
 
 ### The anchors, and what to do when one moves
 
 Every anchor lives in one place — the `ANCHORS` object in `scripts/apply-bob-patches.cjs`
 (around L397) — so preflight and the patch steps can never disagree.
+
+> **The one place this repo's docs still spell other runtimes' names.** The anchor column below
+> quotes **verbatim upstream source text** that `preflight()` greps for byte-for-byte; a
+> neutralized paraphrase would simply not match. Those literals are therefore kept inside code
+> spans here (and in `UPSTREAM.md`'s inventory tables, for the same reason), and nowhere else in
+> the human-facing docs.
 
 | Step | Anchor | If it moves |
 |---|---|---|
@@ -203,8 +209,9 @@ Every anchor lives in one place — the `ANCHORS` object in `scripts/apply-bob-p
 > tarball. A "does the function still exist upstream?" check is meaningless — the re-injection
 > contract is what matters: grep-absent in the tarball, present after the script runs. Confirm:
 > ```bash
-> grep -c convertClaudeCommandToBobSkill "$SRC/gsd-core/bin/lib/runtime-artifact-conversion.cjs"  # → 0 (absent in pristine)
-> grep -c convertClaudeCommandToBobSkill gsd-core/bin/lib/runtime-artifact-conversion.cjs         # → >0 (present post-script)
+> sig=ToBobSkill
+> grep -c "$sig" "$SRC/gsd-core/bin/lib/runtime-artifact-conversion.cjs"  # → 0 (absent in pristine)
+> grep -c "$sig" gsd-core/bin/lib/runtime-artifact-conversion.cjs         # → >0 (present post-script)
 > node --check gsd-core/bin/lib/capability-registry.cjs   # anchor inserts must not corrupt JS
 > node --check gsd-core/bin/lib/runtime-artifact-conversion.cjs
 > node --check gsd-core/bin/lib/runtime-name-policy.cjs
@@ -237,7 +244,8 @@ node gsd-core/bin/gsd-tools.cjs query state.load                    # → exit 0
 ```
 
 If `dispatch-isolation` reports a runtime other than `bob`, delta 9 (`gsd-core/.gsd-runtime`)
-is missing — that marker is what stops every dispatch query answering for `claude`.
+is missing — that marker is what stops every dispatch query answering for the reference
+runtime.
 
 ## Step 8 — Node floor: grep for Node-24-only APIs, then smoke on the floor
 
@@ -292,7 +300,8 @@ and run `node scripts/stamp-covers.cjs --check` to confirm the stamps are curren
 Run the **invariants first** — they must pass **unmodified** (they are never drift-eligible):
 
 ```bash
-node --test test/backend-neutrality.test.cjs test/descriptor.test.cjs test/model-neutrality.test.cjs
+node --test test/backend-neutrality.test.cjs test/descriptor.test.cjs \
+  test/model-neutrality.test.cjs test/agent-neutrality.test.cjs
 ```
 
 Then the full suite, compared against the step-1 baseline. Classify every *non-baseline* failure:
@@ -338,9 +347,9 @@ Finally, re-verify every `file:line` pointer in `UPSTREAM.md` and `ARCHITECTURE.
 
 ```bash
 grep -n '"bob": {' gsd-core/bin/lib/capability-registry.cjs
-grep -n 'function convertClaudeCommandToBobSkill\|function convertClaudeCommandToBobCommand\|function convertClaudeToBobContent' gsd-core/bin/lib/runtime-artifact-conversion.cjs
-grep -n 'convertClaudeToBobContent,\|convertClaudeCommandToBobSkill,\|convertClaudeCommandToBobCommand,' gsd-core/bin/lib/runtime-artifact-conversion.cjs
-grep -n "'convertClaudeCommandToBob" gsd-core/bin/lib/capability-validator.cjs
+grep -n 'function .*ToBob' gsd-core/bin/lib/runtime-artifact-conversion.cjs   # the three impls
+grep -n '^  .*ToBob.*,$' gsd-core/bin/lib/runtime-artifact-conversion.cjs     # the three exports
+grep -n 'ToBob' gsd-core/bin/lib/capability-validator.cjs                     # the two allowlist entries
 grep -n 'bob:' gsd-core/bin/lib/runtime-name-policy.cjs
 grep -n '"bob"' gsd-core/bin/shared/runtime-aliases.manifest.json
 grep -n '\.bob/gsd-core/bin' gsd-core/references/gsd-run-resolver.md
@@ -359,6 +368,27 @@ grep -n 'use_worktrees' "$TMP/.planning/config.json"     # → false
 cat "$TMP/.bob/gsd-core/.gsd-runtime"                    # → bob
 node "$TMP/.bob/gsd-core/bin/gsd-tools.cjs" runtime-identity --raw   # shim loads OUT OF TREE
 ```
+
+**Then check the neutrality of what you just staged** — the stage-time Bob-ification pass
+(ARCHITECTURE Axis 3) runs only on a real install, so this is where a bump can break it:
+
+```bash
+node --test test/agent-neutrality.test.cjs      # NEUTRAL-04: it installs both scopes itself
+# and, on the scratch target you already have, a quick eyeball of the two load-bearing facts:
+grep -rc '_GSD_SHIM_NAME' "$TMP/.bob/gsd-core/workflows" | head -n 1   # the Bob-only preamble is present
+grep -rn 'CONFIG_DIR:-' "$TMP/.bob/gsd-core/workflows" | wc -l         # → 0 (no upstream host path survives)
+grep -n 'context_window\|resolve_model_ids' "$TMP/.planning/config.json"  # → 200000 / "omit"
+```
+
+> **A new upstream runtime name must be added to the adapter's table.** `bobifyRuntimeDoc`
+> neutralizes names from the **base64-encoded** tables at the top of the NEUTRAL-04 section of
+> `src/bob-adapter.cjs` (`OTHER_RUNTIME_NAMES`, `MODEL_VENDOR_NAMES`, `MODEL_PRODUCT_NAMES`).
+> If `<new>` adds a runtime, a vendor or a model family that upstream now names in its doc
+> tree, that name will pass straight through to the model. Add it to the right table —
+> re-encode the whole JSON array with
+> `node -e 'console.log(Buffer.from(JSON.stringify([...])).toString("base64"))'`, longest name
+> first so compounds win — and re-run `test/agent-neutrality.test.cjs`, which is what catches
+> the omission.
 
 For a global install, point `HOME` at a scratch dir and check the **scope-asymmetric** modes
 path — `settings/custom_modes.yaml`, not the home root — and that emitted refs are **absolute**:
@@ -382,7 +412,8 @@ Both were repaired in Phase 12 and the suite has been fully green (334/334) sinc
 investigate, not a fact of life. Only a **new** failing test ID is a real re-vendor delta.
 
 **(b) The stock `gsd-core/bin/lib/legacy-cleanup.cjs` `1.5.0` comment is a permanent expected
-exception.** It is an immutable upstream historical comment (a Codex-migration reference),
+exception.** It is an immutable upstream historical comment (a migration reference for
+another runtime),
 byte-identical in every tarball. **Grep-exclude it** in every version-residue sweep
 (`grep -v 'legacy-cleanup.cjs'`). Editing it would introduce an undocumented **tenth** delta
 that `scripts/apply-bob-patches.cjs` does not reproduce, breaking idempotency and the

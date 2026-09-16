@@ -9,8 +9,8 @@
 the spec-driven "Getting Stuff Done" planning framework, run natively inside
 [IBM Bob](https://bob.ibm.com). Install with one command and run the full GSD planning loop
 (new-project → plan-phase → execute-phase → verify) as Bob-native slash commands and Agent
-Skills, producing the same `.planning/` artifacts GSD produces in Claude Code — regardless
-of which model backend Bob routes to.
+Skills, producing the same `.planning/` artifacts GSD produces on the reference runtime it was
+authored for — regardless of which model backend Bob routes to.
 
 ## Requirements
 
@@ -94,21 +94,54 @@ config JSON) and hash-match deletes tracked file entries. It **never deletes `.p
 
 Use `--dry-run` on any install to print the full staging plan without writing anything.
 
-## What the installer seeds into `.planning/config.json`
+## Bob limitations the installer encodes
 
-The install merges exactly **three** adapter-owned keys into the workspace-root
-`.planning/config.json` (and removes exactly those three on `--uninstall`). Each is a Bob
-runtime constant, not a user preference — the authority is `BOB_OWNED_CONFIG` in
-`src/installer/config-merge.cjs`:
+The install merges exactly **four** adapter-owned keys into the workspace-root
+`.planning/config.json` (and removes exactly those four on `--uninstall`). Each one encodes a
+Bob **limitation or ownership boundary**, not a user preference — the authority is
+`BOB_OWNED_CONFIG` in `src/installer/config-merge.cjs`:
 
-| Key | Value | Why |
+| Key | Value | The Bob limitation it encodes |
 |---|---|---|
 | `workflow.text_mode` | `true` | Bob has no structured-choice prompt primitive, so interactive GSD flows must render as numbered text choices. |
 | `workflow.use_worktrees` | `false` | Bob has no **git-worktree** primitive (its `spawn_subagent` gives context isolation, not a worktree). Since gsd-core 1.14.0 the `execute-phase` / `quick-batch` isolation gate exits `FATAL: runtime declares no executor-isolation primitive` on a runtime whose descriptor sets `dispatch.isolation: "none"` **unless** this key is `false`. Executors then run in the main checkout — exactly how they ran under 1.6.1; the gate is new, the behaviour is not. |
-| `context_window` | `270000` | Bob's real runtime window. gsd-core keys its read-depth / advisory scaling on this top-level integer and defaults to a conservative `200000` when it is absent. |
+| `context_window` | `200000` | **The conservative floor of Bob's own documented window.** Bob's 2.0.0 release notes give the runtime window as *"200,000 to 270,000 tokens"* — which end applies depends on the backend Bob routes the session to, and Bob owns that routing, so the adapter cannot know it at install time. gsd-core keys its read-depth and advisory scaling on this top-level integer, so gsd-bob seeds the **floor**: a budget that is correct on every backend rather than one that overflows on the smaller ones. (v0.2.x–v0.3.0 seeded the 270k ceiling — the optimistic end of the same range.) The GSD loop shares one window in the common case, so this is the operative budget. |
+| `resolve_model_ids` | `"omit"` | **Bob owns model routing.** gsd-core's own installer writes this for every non-reference runtime. With it, workflow dispatches carry **no model parameter** (a capability-tier alias would 404 on a host with no native tier names) and no flow asks the user to pick a model. This is the config half of the neutrality rule below. |
 
 Your own keys are never touched, and an unparseable `config.json` is left exactly as-is with a
 note rather than clobbered.
+
+## What the model sees
+
+Every markdown document the model reads under Bob — the converted `.bob/commands/` and
+`.bob/skills/`, **and** the vendored `gsd-core/` doc tree (workflows, references, templates,
+contexts) — is rewritten at **install (stage) time**, never left upstream-shaped on disk:
+
+- **Host paths are re-pointed at this install.** The upstream reference runtime's config-home
+  paths become this install's location, scope-aware: workspace-relative `.bob/gsd-core/…` for
+  `--local`, the absolute target for `--global`. The upstream project-instruction filename
+  becomes `AGENTS.md`. These are functional, not cosmetic — the workflows read sibling files by
+  these paths.
+- **One resolver preamble, Bob's.** Upstream ships a `gsd_run` resolver line that probes the
+  config homes of 19 different runtimes. It is replaced wholesale with a Bob-only probe (this
+  install → workspace `.bob` → `~/.bob` → `gsd_run` on `PATH`), keeping the
+  package-identity check.
+- **Notes for other hosts are dropped.** Upstream's own runtime-note filter is run with `bob`
+  as the target, so guidance addressed to a different host never reaches the model.
+- **Agent, vendor and model names are neutralized** in prose *and* in every non-shell fenced
+  block (the json/xml/markdown examples the model reads as templates): the reference runtime's
+  name becomes **Bob**, any other runtime becomes *"another runtime"*, vendors become *"the
+  model vendor"*, and model products/tiers become capability-neutral phrases
+  (*"a higher-capability model"*, *"a balanced model"*, *"a faster model"*).
+
+**Shell-fence policy — the one deliberate residual.** Inside a *shell* fenced block only
+comment lines and `echo`/`printf` message lines are neutralized. Bare identifiers are left
+exactly as upstream wrote them: `case … in <runtime-id>)` arms, dead `$<RUNTIME>_*` env-var
+probes, `--<runtime>` tokens inside a command line. Renaming those would either activate
+another host's branch on Bob or leave a live arm under a misleading name. Roughly **130** such
+identifiers remain across the vendored tree; the count is bounded by
+`test/agent-neutrality.test.cjs`, so if the transform ever stops running the number jumps and
+the suite fails loud.
 
 ## Supported skills
 
@@ -201,7 +234,7 @@ spawning another) is still forbidden by Bob, and no GSD workflow requires it.
 
 What Bob still does **not** have is a git-worktree isolation primitive, which is why the
 runtime descriptor declares `dispatch.isolation: "none"` and the installer seeds
-`workflow.use_worktrees: false` (see [what the installer seeds](#what-the-installer-seeds-into-planningconfigjson)).
+`workflow.use_worktrees: false` (see [Bob limitations the installer encodes](#bob-limitations-the-installer-encodes)).
 Interactive prompts likewise still degrade to numbered `text_mode` choices rather than a
 structured-choice payload — that remains a conservative default, not a re-verified one.
 
@@ -226,11 +259,15 @@ retired there), so the check is a standing step in `MAINTAINING.md` for every bu
 There is still **no live Bob 2.x on the development device** — the machine currently has Bob
 Shell **1.0.4**, the unsupported generation (the Bob Shell 2.0.1 install that Phase 12 verified
 against is gone). All dev-time verification is therefore **doc-conformance, golden-diff, and
-Claude-runtime equivalence** — never an on-device Bob 2.x run. The standing suites prove the
+reference-runtime equivalence** — never an on-device Bob 2.x run. The standing suites prove the
 contract holds without a live Bob:
 
 - `test/backend-neutrality.test.cjs` — zero model-backend literals in the bob runtime entry
   and adapter.
+- `test/agent-neutrality.test.cjs` — the neutrality invariant: zero agent/vendor/model names in
+  the emitted commands, skills, mode and roster; zero in doc-tree prose and non-shell fences;
+  the shell-fence residual bounded; no upstream host path surviving anywhere; every resolver
+  preamble the Bob one; and the four seeded config keys pinned.
 - `test/descriptor.test.cjs` / `test/bob2-capability.test.cjs` — the `"bob"` descriptor's shape
   and the Bob 2.0 surface facts, pinned so a drift fails loud.
 - `test/quality-gate-equivalence.test.cjs` / `test/quality-gate-contract.test.cjs` — the

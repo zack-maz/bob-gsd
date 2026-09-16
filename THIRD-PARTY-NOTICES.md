@@ -9,7 +9,11 @@ licenses require.
 The `gsd-core/` directory and the `commands/gsd/*.md` sources are a curated, patched copy of
 the [`@opengsd/gsd-core`](https://github.com/open-gsd/gsd-core) npm package — the version
 recorded in `gsd-core/VERSION`. The local modifications (nine replayable deltas) are
-documented in `scripts/apply-bob-patches.cjs` and `MAINTAINING.md`. The upstream license:
+documented in `scripts/apply-bob-patches.cjs` and `MAINTAINING.md`. In addition, the installer
+rewrites the redistributed markdown at install time — host paths re-pointed at the install, the
+shim-resolver preamble replaced by a Bob-only one, and agent/vendor/model names in prose
+neutralized (`ARCHITECTURE.md` Axis 3) — so a gsd-bob install is a **modified** copy of the
+upstream doc tree, not a verbatim one. The upstream license:
 
 ```
 MIT License

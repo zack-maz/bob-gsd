@@ -2,11 +2,11 @@
 
 ## What This Is
 
-A standalone, installable adapter package that makes **open-gsd** — the GSD ("Getting Stuff Done") spec-driven planning framework, today a Claude Code skill/agent system — run natively inside **IBM Bob** (bob.ibm.com). It audits GSD's primitives (slash commands, subagents, workflows, templates), maps Bob's extension architecture, and translates GSD into Bob-native artifacts that work regardless of which model backend Bob routes to (Claude Code CLI, Gemini, etc.). It ships with a one-line npx installer (local/global scope, update/clean modes) and is built clean enough to eventually be contributed upstream as a first-class Bob runtime in gsd-core.
+A standalone, installable adapter package that makes **open-gsd** — the GSD ("Getting Stuff Done") spec-driven planning framework, authored today as a skill/agent system for a single reference runtime — run natively inside **IBM Bob** (bob.ibm.com). It audits GSD's primitives (slash commands, subagents, workflows, templates), maps Bob's extension architecture, and translates GSD into Bob-native artifacts that work regardless of which model backend Bob routes to. It ships with a one-line npx installer (local/global scope, update/clean modes) and is built clean enough to eventually be contributed upstream as a first-class Bob runtime in gsd-core.
 
 ## Core Value
 
-A Bob user can install via a single command and run the full GSD planning loop — new-project → plan-phase → execute-phase → verify — natively, producing the same `.planning/` artifacts GSD produces in Claude Code.
+A Bob user can install via a single command and run the full GSD planning loop — new-project → plan-phase → execute-phase → verify — natively, producing the same `.planning/` artifacts GSD produces on the reference runtime.
 
 ## Current State
 
@@ -63,7 +63,7 @@ Still deferred beyond v3.0: the `transition` lifecycle command, `ai-integration-
 
 ### Out of Scope
 
-- Multi-backend-specific tuning per model (Gemini-specific, Claude-specific behavior) — v1 core is backend-agnostic; per-backend richness is deferred
+- Per-backend behavioural tuning (one branch per model family) — v1 core is backend-agnostic; per-backend richness is deferred
 - Rich "map to Bob-native equivalents" for primitives Bob lacks (e.g. deep mode/agent re-modeling of interactive prompts and subagents) — held as a later-milestone enhancement; v1 flags these gaps instead
 - "Text mode" graceful-degradation fallback — not the v1 strategy (parity-first instead); may be revisited if parity proves too restrictive
 - Full parity of all ~70 GSD skills — v1 is core loop + quality gates only; the long tail is deferred
@@ -117,7 +117,12 @@ Still deferred beyond v3.0: the `transition` lifecycle command, `ai-integration-
 | (Phase 13) Keep `engines.node >= 22.15.0` despite upstream's `>= 24` | The only Node-24 API the payload reaches for (`RegExp.escape`) is feature-detected with an in-file fallback, and the vendored `bin` was executed on Node 22.15.0. `>=22.15.0` is the union with Bob Shell's own documented floor | ✓ Good — re-verified empirically; MAINTAINING makes it a standing step |
 | (Phase 13) Seed `workflow.use_worktrees: false` at install rather than declaring `orchestrator-worktree` | 1.14.0's isolation gate exits FATAL on `dispatch.isolation: "none"`; Bob has no git-worktree primitive, and declaring `orchestrator-worktree` would need a verified headless-Bob `orchestratorExec` | ✓ Good — preserves 1.6.1 behaviour; the spike is recorded, not assumed |
 | (Phase 13) Keep `commands/gsd/*.md` as the conversion source rather than switching to upstream's `skills/` tree | `argument-hint` parity and zero churn to goldens, roster and all three doc generators; upstream's pre-hyphenated skills are a future simplification | — Recorded, not adopted |
-| (Phase 13) **Defer NEUTRAL-04 to its own phase** rather than bundling it into the re-sync | Fuzzy prose rewriting across 31 commands under a brand-new invariant, not required for 1.14.0 correctness, and easy to half-do inside a compatibility task | — Pending (Phase 18); recorded, not dropped |
+| (Phase 13) **Defer NEUTRAL-04 to its own phase** rather than bundling it into the re-sync | Fuzzy prose rewriting across 31 commands under a brand-new invariant, not required for 1.14.0 correctness, and easy to half-do inside a compatibility task | ✓ Good — the deferral held, and the phase then ran the same day once the fix turned out to be one transform, not 31 rewrites |
+| (Phase 18) Neutralize agent/vendor/model names with **one stage-time transform** over every runtime document, not per-command prose edits | The offending text lives in the vendored payload and in the converted output alike; a transform applied as the payload is copied covers both, survives every re-vendor, and cannot be half-done. It must live at stage time because the correct host-path replacement is scope-dependent — only the copy knows the scope | ✓ Good — `bobifyRuntimeDoc`; zero names in prose and non-shell fences across both scopes |
+| (Phase 18) **Leave bare identifiers inside shell fences alone**, and bound the residual by test instead of chasing zero | Renaming a `case … in <runtime-id>)` arm or a dead env-var probe could activate another host's branch on Bob, or leave a live arm under a misleading name — a correctness risk taken for a cosmetic gain. ~130 remain; the count is asserted, so a transform that stops running fails loud | ✓ Good — honest bound, no silent regression path |
+| (Phase 18) **Seed `context_window` at the 200k FLOOR, not the 270k ceiling** | Bob's own 2.0.0 release notes give the window as "200,000 to 270,000 tokens" depending on the backend Bob routes to, and Bob owns that routing. gsd-core scales read-depth on this integer, so the floor is correct everywhere while the ceiling overflows on the smaller backends | ✓ Good — supersedes the v2.0-close decision above |
+| (Phase 18) **Seed `resolve_model_ids: "omit"`** rather than mapping capability tiers to Bob model ids | Bob owns model routing; gsd-core's own installer writes this for every non-reference runtime. Dispatches then carry no model parameter (a tier alias would 404 on a host with no native tier names) and no flow asks the user to pick a model | ✓ Good — the config half of NEUTRAL-04; seeds are now four keys from one declaration |
+| (Phase 18) Hold **gsd-bob's own docs** to the same rule, with `UPSTREAM.md`'s inventory tables and `MAINTAINING.md`'s anchor table as the only exceptions | Those two documents exist to point a gsd-core maintainer at gsd-core's own code, and `preflight()` greps the anchors byte-for-byte — a neutralized paraphrase would simply not match. Historical planning records are not rewritten; history stays as written | ✓ Good — each exception declared once, in the file that uses it |
 
 ## Evolution
 
@@ -137,4 +142,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-16 — Phase 13 closed. The milestone is re-targeted to gsd-core **1.14.0** (from 1.10.0) and to **Bob 2.0.x only**; the payload, installer, tests and docs are all on that baseline. NEUTRAL-04 split out into a new Phase 18. The "no local Bob" constraint is partially back: the dev device is on Bob Shell 1.0.4, so the live-Bob acceptance pass is deferred again to Phase 17. Delta research: the four `research/260916-*.md` reports.*
+*Last updated: 2026-09-16 — Phases 13 and 18 closed (18 executed as Phase 13's second pass). The milestone is re-targeted to gsd-core **1.14.0** (from 1.10.0) and to **Bob 2.0.x only**; the payload, installer, tests and docs are all on that baseline. NEUTRAL-04 was split out into Phase 18 and then executed the same day: every markdown the model reads is Bob-ified at stage time, and the `.planning/config.json` seeds grew to four keys (`context_window` moved to the documented 200k floor; `resolve_model_ids: "omit"` added). The "no local Bob" constraint is partially back: the dev device is on Bob Shell 1.0.4, so the live-Bob acceptance pass is deferred again to Phase 17. Delta research: the four `research/260916-*.md` reports.*

@@ -7,10 +7,10 @@ last_updated: "2026-09-16T00:00:00.000Z"
 last_activity: 2026-09-16
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 29
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 43
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** A Bob user installs via a single command and runs the full GSD planning loop (new-project → plan-phase → execute-phase → verify) natively, producing the same `.planning/` artifacts GSD produces in the reference runtime.
-**Current focus:** Phase 13 complete — next up is Phase 15 (MCP) or Phase 18 (NEUTRAL-04); Phases 14 and 17 are blocked
+**Current focus:** Phases 13 and 18 complete — next up is Phase 15 (MCP); Phases 14 and 17 are blocked
 
 ## Current Position
 
-Phase: 13 complete — gsd-core 1.14.0 Re-sync
-Plan: 13-01 complete
-Status: Phase 13 closed. **No unblocked phase is the obvious next one** — Phase 14 is blocked on missing Bob docs, Phase 17 on missing Bob 2.x hardware. Phase 15 (MCP) and Phase 18 (NEUTRAL-04) are both runnable.
-Last activity: 2026-09-16 — Phase 13 executed end to end: payload re-vendored 1.6.1 → 1.14.0, nine deltas (was six) with preflight + verify, descriptor re-shaped and validated by 1.14.0's own validator, 28 → 31 commands, `use_worktrees` seed + `.gsd-runtime` marker, global installs made absolute, resolver `.bob` probe, docs + planning record rewritten
+Phase: 13 complete (both passes) — gsd-core 1.14.0 Re-sync; Phase 18 (NEUTRAL-04) complete, executed as its second pass
+Plan: 13-01 complete · 13-02 complete (agent-neutrality)
+Status: Phases 13 and 18 closed. **Phase 15 (MCP) is the one clearly runnable phase left** — Phase 14 is blocked on missing Bob docs, Phase 17 on missing Bob 2.x hardware, Phase 16's verdict is already recorded.
+Last activity: 2026-09-16 — Phase 13 second pass (NEUTRAL-04): stage-time agent-neutralization of every markdown the model reads (converted commands/skills **and** the vendored `gsd-core` doc tree) via `bobifyRuntimeDoc`; the config seeds grew to four with `context_window` moved 270000 → 200000 and `resolve_model_ids: "omit"` added; `test/agent-neutrality.test.cjs` added; every human-facing doc and cover neutralized. Suite 389/389 green. First pass, earlier the same day: payload re-vendored 1.6.1 → 1.14.0, nine deltas (was six) with preflight + verify, descriptor re-shaped and validated by 1.14.0's own validator, 28 → 31 commands, `use_worktrees` seed + `.gsd-runtime` marker, global installs made absolute, resolver `.bob` probe, docs + planning record rewritten
 
 **Decisions taken in Phase 13 (D-01..D-11):**
 
@@ -154,10 +154,16 @@ Recent decisions affecting current work:
 - [Phase 13]: **Bob 2.0.x only** (user decision). 1.0.x has no skills and no subagents, so only `.bob/commands/` + the mode would load; 2.0.0 requires a fresh install anyway. No installer version probe and no 1.0.x test matrix (D-05).
 - [Phase 13]: The six-delta model is now **nine** — `VALID_CONVERTER_NAMES` allowlist entries, `.bob` probes in the `gsd_run` resolver preamble, and the per-install `gsd-core/.gsd-runtime` marker. `apply-bob-patches.cjs` gained `preflight()` (before the first write) and `verifyAll()` (after the run) because the 1.6.1-era script aborted half-applied on an anchor upstream had deleted in 1.7.0 (D-08).
 - [Phase 13]: `workflow.use_worktrees: false` is seeded at install alongside `text_mode` and `context_window`, from one `BOB_OWNED_CONFIG` declaration, and un-merged on uninstall. 1.14.0's execute-phase isolation gate exits FATAL on `dispatch.isolation: "none"` without it; Bob has no git-worktree primitive, so this preserves 1.6.1 behaviour rather than changing it (D-04).
-- [Phase 13]: Runtime identity lives in the payload marker `gsd-core/.gsd-runtime`, **never** in `.planning/config.json` — that file is the Claude↔Bob interchange surface and must not pin a runtime.
+- [Phase 13]: Runtime identity lives in the payload marker `gsd-core/.gsd-runtime`, **never** in `.planning/config.json` — that file is the cross-runtime interchange surface and must not pin a runtime.
 - [Phase 13]: Global installs emit absolute `<target>/gsd-core/...` refs (converters take `isGlobal`; `absolutizeGlobalHome()` rewrites `~/.bob/`), local installs keep the workspace-relative form (D-07).
 - [Phase 13]: Keep `commands/gsd/*.md` as the conversion source rather than switching to upstream's pre-hyphenated `skills/` tree — `argument-hint` parity, zero churn to goldens/roster/generators. Recorded as a future simplification (D-03).
-- [Phase 13]: NEUTRAL-04 is deferred to its own Phase 18, recorded rather than silently dropped (D-10).
+- [Phase 13]: NEUTRAL-04 is deferred to its own Phase 18, recorded rather than silently dropped (D-10) — **then executed the same day as Phase 13's second pass**, once it became clear the fix was one stage-time transform rather than 31 prose rewrites.
+- [Phase 18]: **`context_window` is seeded at 200000, not 270000 — the FLOOR of Bob's own range, not the ceiling.** Bob's 2.0.0 release notes give the runtime window as *"200,000 to 270,000 tokens"*; which end applies depends on the backend Bob routes the session to, and Bob owns that routing, so the adapter cannot know it at install time. gsd-core keys read-depth and advisory scaling on this integer, so seeding the floor is correct on every backend while the ceiling overflows on the smaller ones. Supersedes the v0.2.x–v0.3.0 value.
+- [Phase 18]: **`resolve_model_ids: "omit"` is seeded** — Bob owns model routing, and gsd-core's own installer writes this for every non-reference runtime. With it, workflow dispatches carry **no** model parameter (a capability-tier alias would 404 on a host with no native tier names) and no flow asks the user to pick a model. This is the config half of NEUTRAL-04; the seeds are now FOUR keys from one `BOB_OWNED_CONFIG` declaration.
+- [Phase 18]: **Neutralization happens at STAGE time, not in the vendored tree.** `bobifyRuntimeDoc` rewrites every markdown the model reads — converted commands/skills *and* the vendored `gsd-core/{workflows,references,templates,contexts}` tree — as it is copied: upstream host paths re-pointed at this install (scope-aware, which is *why* it cannot live in the tracked payload: only the copy knows the scope), the 19-runtime `gsd_run` resolver preamble replaced by a Bob-only one, upstream's `filterRuntimeNotesForTarget(…, 'bob')` dropping other hosts' notes, and agent/vendor/model names neutralized in prose and in every non-shell fenced block. Keeping the tracked tree upstream-shaped also keeps the re-vendor replay small.
+- [Phase 18]: **The shell-fence residual is deliberate and bounded by test.** Inside a shell fenced block only comment and `echo`/`printf` lines are neutralized; ~130 bare identifiers (`case … in <runtime-id>)` arms, dead env-var probes, `--<runtime>` tokens in a command line) are left exactly as upstream wrote them, because renaming them could **activate another host's branch** on Bob or leave a live arm under a misleading name. `test/agent-neutrality.test.cjs` counts the residual and fails if it grows, so a transform that silently stops running is caught.
+- [Phase 18]: **Every name table in the adapter is base64-decoded at load**, so the neutral module carries no bare brand literal in source — the same discipline as the model-tier tokens. A new upstream runtime/vendor/model name must be added to those tables or it passes straight through to the model; `MAINTAINING.md` step 11 carries that as a standing bump step.
+- [Phase 18]: **gsd-bob's own docs follow the same rule**, with exactly two declared exceptions: `UPSTREAM.md`'s inventory tables and `MAINTAINING.md`'s anchor table may quote upstream symbol names, registry keys and grep anchors verbatim, because they exist to point a gsd-core maintainer at gsd-core's own code (and `preflight()` greps those anchors byte-for-byte). Each file says so once. Historical planning records — phase summaries, research, quick-task records, ACCEPTANCE-* — are **not** rewritten; history stays as written.
 - [Phase 13]: External/pluggable runtime descriptors are a verified **NO-GO** — every module that resolves a runtime requires the frozen `capability-registry.cjs` directly and never calls `capability-loader.cjs`'s `loadRegistry`. The vendored hand-patch stays; the upstream contribution shape is `capabilities/bob/capability.json` + a regenerated registry.
 - [Phase 12]: Roster candidates must all be real emitted artifacts — the synthetic `gsd-parallel-fanout` exemplar was removed. The gate's flag/skip path is proven by unit tests, not by a fictional roster row.
 

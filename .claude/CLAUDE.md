@@ -4,9 +4,9 @@
 
 **GSD for IBM Bob (gsd-bob)**
 
-A standalone, installable adapter package that makes **open-gsd** — the GSD ("Getting Stuff Done") spec-driven planning framework, today a Claude Code skill/agent system — run natively inside **IBM Bob** (bob.ibm.com). It audits GSD's primitives (slash commands, subagents, workflows, templates), maps Bob's extension architecture, and translates GSD into Bob-native artifacts that work regardless of which model backend Bob routes to (Claude Code CLI, Gemini, etc.). It ships with a one-line npx installer (local/global scope, update/clean modes) and is built clean enough to eventually be contributed upstream as a first-class Bob runtime in gsd-core.
+A standalone, installable adapter package that makes **open-gsd** — the GSD ("Getting Stuff Done") spec-driven planning framework, authored today as a skill/agent system for a single reference runtime — run natively inside **IBM Bob** (bob.ibm.com). It audits GSD's primitives (slash commands, subagents, workflows, templates), maps Bob's extension architecture, and translates GSD into Bob-native artifacts that work regardless of which model backend Bob routes to. It ships with a one-line npx installer (local/global scope, update/clean modes) and is built clean enough to eventually be contributed upstream as a first-class Bob runtime in gsd-core.
 
-**Core Value:** A Bob user can install via a single command and run the full GSD planning loop — new-project → plan-phase → execute-phase → verify — natively, producing the same `.planning/` artifacts GSD produces in Claude Code.
+**Core Value:** A Bob user can install via a single command and run the full GSD planning loop — new-project → plan-phase → execute-phase → verify — natively, producing the same `.planning/` artifacts GSD produces on the reference runtime.
 
 ### Constraints
 
@@ -29,8 +29,8 @@ gsd-core's own installer so the work stays upstream-mergeable. Distribution is
 
 Do **not** add: a CLI framework (`commander`/`oclif`/`yargs`), `fs-extra`/`copyfiles`/`cpy`,
 `chalk`/`ora`, ESM (`"type":"module"`), a YAML parser in the install path (frontmatter is
-hand-sliced; `js-yaml` is already used only for the `custom_modes.yaml` merge), or
-`@anthropic-ai/claude-agent-sdk` (gsd-bob is backend-agnostic by design).
+hand-sliced; `js-yaml` is already used only for the `custom_modes.yaml` merge), or any
+model-vendor agent SDK (gsd-bob is backend-agnostic by design).
 
 ## How gsd-core Actually Works (verified 2026-09-16 against the vendored 1.14.0 tree)
 
@@ -57,7 +57,7 @@ hand-sliced; `js-yaml` is already used only for the `custom_modes.yaml` merge), 
 - **1.14.0 behavioural gate:** `execute-phase`'s isolation-dispatch step exits `FATAL` on a runtime
   whose descriptor declares `dispatch.isolation: "none"` unless `workflow.use_worktrees=false`.
   The installer seeds that key; `.planning/config.json` gets **no** `runtime` key (it is the
-  Claude↔Bob interchange surface) — runtime identity lives in `gsd-core/.gsd-runtime`.
+  cross-runtime interchange surface) — runtime identity lives in `gsd-core/.gsd-runtime`.
 
 ## IBM Bob Extension Surface (verified 2026-09-16: docs + the shipped bundles)
 
@@ -95,8 +95,36 @@ Node 24.
   servers are not loaded. `bob --trust` / `bob run --trust`, or the folder-trust dialog.
 - **`.bob/agents/` persona files are not documented anywhere** (the page was withdrawn, 404) —
   Phase 14 stays deferred rather than guessing a format.
-- No structured-choice prompt primitive → `workflow.text_mode: true` is seeded. Bob's real
-  context window is **270k** → `context_window: 270000` is seeded.
+- **The installer seeds exactly FOUR adapter-owned `.planning/config.json` keys**
+  (`BOB_OWNED_CONFIG` in `src/installer/config-merge.cjs` is the only authority; uninstall
+  removes exactly these, never the file):
+  - `workflow.text_mode: true` — no structured-choice prompt primitive.
+  - `workflow.use_worktrees: false` — no git-worktree primitive; required by 1.14.0's
+    isolation gate (above).
+  - `context_window: 200000` — **the FLOOR, not the ceiling.** Bob's own 2.0.0 release notes
+    give the window as *"200,000 to 270,000 tokens"* depending on the backend Bob routes to,
+    and Bob owns that routing, so the adapter seeds the conservative end. (v0.2.x–v0.3.0
+    seeded 270000; that was the optimistic end of the same range.)
+  - `resolve_model_ids: "omit"` — Bob owns model routing; gsd-core's own installer writes this
+    for every non-reference runtime. Dispatches carry **no** model parameter and no flow asks
+    the user to pick a model.
+- **Neutrality rule (NEUTRAL-04): the only agent Bob's user ever sees named is Bob.** Every
+  markdown the model reads — the converted `commands/`/`skills/` **and** the vendored
+  `gsd-core/{workflows,references,templates,contexts}` tree — is Bob-ified at **stage time** by
+  `bobifyRuntimeDoc` in `src/bob-adapter.cjs`: upstream host paths re-pointed at this install
+  (scope-aware), the 19-runtime `gsd_run` resolver preamble replaced by a Bob-only one,
+  upstream's `filterRuntimeNotesForTarget(…, 'bob')` dropping other hosts' notes, and
+  agent/vendor/model names neutralized in prose and in every **non-shell** fenced block (the
+  reference runtime → "Bob", any other runtime → "another runtime", vendors → "the model
+  vendor", the upstream instruction file → `AGENTS.md`). **Inside SHELL fences only comment and
+  `echo`/`printf` lines are neutralized** — bare identifiers (`case … in <runtime-id>)`, dead
+  env-var probes) are deliberately left, because renaming them could activate another host's
+  branch; ~130 such identifiers remain tree-wide and the count is bounded by test. Every name
+  table in the adapter is **base64-decoded at load**, so the adapter source carries no bare
+  brand literal. Enforced by `test/agent-neutrality.test.cjs`. The same rule applies to this
+  repo's own human-facing docs — `UPSTREAM.md`'s inventory tables and `MAINTAINING.md`'s anchor
+  table are the only places allowed to quote upstream symbol names verbatim, because they point
+  a gsd-core maintainer at gsd-core's own code.
 
 ## Sources
 
@@ -137,7 +165,7 @@ Architecture not yet mapped. Follow existing patterns found in the codebase.
 
 ## Project Skills
 
-No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
+No project skills found. Add skills to `.agents/skills/` (or the host's own skills directory) with a `SKILL.md` index file.
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->

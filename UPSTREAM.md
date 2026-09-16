@@ -13,13 +13,20 @@
 re-grepped against that re-vendored source on 2026-09-16, not carried over from the 1.6.1
 edition. `MAINTAINING.md` step 10 re-verifies them on every bump.
 
+> **Why this one document still spells other runtimes' names.** gsd-bob's own human-facing docs
+> are written host-neutral — Bob is the only agent they name. This document is the exception,
+> and deliberately so: its whole job is to point a gsd-core maintainer at **gsd-core's own
+> code**, whose symbol names, registry keys and filenames are what they are. Those literals
+> appear only inside code spans in the inventory tables below (and in `MAINTAINING.md`'s anchor
+> table, which greps upstream source byte-for-byte). Nowhere else.
+
 ## The contribution shape under 1.14.0: one `capability.json`
 
 Since ADR-1239, gsd-core's registry is **generated**:
 `scripts/gen-capability-registry.cjs` reads `capabilities/<id>/capability.json`, and for
 `role === 'runtime'` copies the capability **verbatim** into `runtimes[capId]` before emitting
 `const runtimes = ` + `JSON.stringify(...)`. Confirmed by diffing
-`capabilities/cline/capability.json` against its emitted block: identical.
+another runtime's `capabilities/<id>/capability.json` against its emitted block: identical.
 
 So the descriptor half of the PR is **one new file** — `capabilities/bob/capability.json`,
 byte-for-byte the registry entry inventoried below — plus the regenerated
@@ -36,7 +43,8 @@ The overlay mechanism exists and would load: `gsd-core/bin/lib/capability-loader
 (`loadRegistry({ includeInstalled: true })`) reads
 `${GSD_HOME || ~}/.gsd/capabilities/<id>/capability.json` and
 `<projectRoot>/.gsd/capabilities/<id>/capability.json`, applies the reserved-id refusal
-(`^(gsd-|gsd-core-|anthropic-)`), full conformance validation, `engines.gsd` satisfaction,
+(a prefix denylist covering `gsd-`, `gsd-core-` and the upstream vendor prefix), full
+conformance validation, `engines.gsd` satisfaction,
 first-party-wins collision resolution, and the project-scope consent store keyed on
 `(realpath(projectRoot), id, bundleContentHash)`; ADR-1239 Phase C-2's configHome trust gate
 (`external-descriptor-trust.cjs` `assertDescriptorConfined`) passes trivially for
@@ -99,19 +107,19 @@ entry** (a descriptor) and **aliases**; config-home resolution is handled by a *
   references in the shim).
 
 The **net-new substance** is therefore the two vendored converters plus one isolated
-adapter module, `src/bob-adapter.cjs` (the support-roster gate, the model-neutralization pass,
+adapter module, `src/bob-adapter.cjs` (the support-roster gate, the neutralization pass,
 and the idempotent `custom_modes.yaml` merge). Everything else — the capability entry, both
 aliases, the allowlist entries, the resolver line — is data.
 
 ## Backend-neutrality guarantee (RUNTIME-04)
 
 The `"bob"` registry entry and `src/bob-adapter.cjs` contain **zero model-backend brand
-literals** (no `Claude` / `Gemini` / `Granite` / `GPT`). Bob owns model routing; gsd-bob is
+literals** — no agent, vendor or model-family name of any kind. Bob owns model routing; gsd-bob is
 backend-agnostic, and the descriptor says so structurally via
 `hostIntegration.modelMode: "passive"`. This is enforced by `test/backend-neutrality.test.cjs`,
 which brace-walks the `"bob"` block out of `capability-registry.cjs` and scans
 `bob-adapter.cjs` against a programmatically-built forbidden-token set (stripping comment lines
-and the universal `convertClaudeCommandTo<Runtime>` converter-name prefix, which is a
+and the universal `convert…CommandTo<Runtime>` converter-name prefix, which is a
 source-format token, not a backend reference).
 
 ```
@@ -125,30 +133,44 @@ Separately, the **emitted** `.bob/` artifact set is held at zero model literals 
 `test/model-neutrality.test.cjs` (NEUTRAL-03), which stages the full real emission and fails
 with every `file:line:token`.
 
+### Not part of this contribution: the stage-time Bob-ification pass
+
+gsd-bob additionally rewrites **every markdown the model reads** at install time — host paths
+re-pointed at the install, the multi-runtime `gsd_run` resolver preamble replaced by a Bob-only
+one, and agent/vendor/model names in prose and non-shell fences neutralized (see
+`ARCHITECTURE.md` Axis 3, `bobifyRuntimeDoc` in `src/bob-adapter.cjs`, enforced by
+`test/agent-neutrality.test.cjs`). That pass is **gsd-bob-only and explicitly NOT part of the
+upstream move.** Upstream's doc tree is authored for its own reference runtime and legitimately
+names it; the pass exists because gsd-bob redistributes that tree to a *different* host. A
+maintainer merging `bob` upstream inherits none of it — upstream already has
+`filterRuntimeNotesForTarget` for the runtime-conditional half, and the rest is a distribution
+concern of this adapter. It is listed here only so a reviewer who diffs a gsd-bob install
+against the pristine payload is not surprised by the rewrites.
+
 ## The 9-artifact upstream-move inventory
 
 All pointers **re-verified against the re-vendored 1.14.0 source**. The `"bob"` entry lives in
 the active runtime object of `capability-registry.cjs` (inside `const runtimes`, immediately
-before the `"claude"` entry).
+before the reference runtime's entry).
 
 | # | Artifact | File:line | Role in the move | Net-new? |
 |---|----------|-----------|------------------|----------|
 | 1 | `"bob"` runtime capability | `gsd-core/bin/lib/capability-registry.cjs` **L5849–5939** | The descriptor: `configHome` `dot-home` `.bob` with `env: []` (**L5861**), `localConfigDir` (**L5866**), `artifactLayout` global+local naming the 2 converters (**L5868–5905**), `triggerPrecedence` (**L5906**), `commandStyle: slash-hyphen` (**L5910**), `hostIntegration` incl. `dispatch.isolation: "none"` (**L5918–5936**) | **YES** (data only — upstream as `capabilities/bob/capability.json`) |
-| 2 | Command converter | `convertClaudeCommandToBobCommand` — named in registry **L5884 / L5902**; impl in `gsd-core/bin/lib/runtime-artifact-conversion.cjs` **L3666** (exported **L3700**) | Claude command → `.bob/commands/gsd-<x>.md`, frontmatter reduced to `description` + `argument-hint` | **YES** — vendored hand-edit (banner **L3578**), a parameterized rewrite of gsd-core's converter family |
-| 3 | Skill converter | `convertClaudeCommandToBobSkill` — named in registry **L5876 / L5894**; impl in `runtime-artifact-conversion.cjs` **L3639** (exported **L3699**) | Claude command → `.bob/skills/gsd-<x>/SKILL.md`, frontmatter reduced to `name` + `description` | **YES** — same vendored block |
-| 3b | Shared content pass | `convertClaudeToBobContent` — impl **L3602** (exported **L3698**) | `.claude`→`.bob` path rewrite + colon→hyphen command dialect, scope-aware via `isGlobal` | **YES** — same vendored block |
+| 2 | Command converter | `convertClaudeCommandToBobCommand` — named in registry **L5884 / L5902**; impl in `gsd-core/bin/lib/runtime-artifact-conversion.cjs` **L3666** (exported **L3700**) | upstream source command → `.bob/commands/gsd-<x>.md`, frontmatter reduced to `description` + `argument-hint` | **YES** — vendored hand-edit (banner **L3578**), a parameterized rewrite of gsd-core's converter family |
+| 3 | Skill converter | `convertClaudeCommandToBobSkill` — named in registry **L5876 / L5894**; impl in `runtime-artifact-conversion.cjs` **L3639** (exported **L3699**) | upstream source command → `.bob/skills/gsd-<x>/SKILL.md`, frontmatter reduced to `name` + `description` | **YES** — same vendored block |
+| 3b | Shared content pass | `convertClaudeToBobContent` — impl **L3602** (exported **L3698**) | upstream dot-home → `.bob` path rewrite + colon→hyphen command dialect, scope-aware via `isGlobal` | **YES** — same vendored block |
 | 4 | Runtime alias (manifest) | `gsd-core/bin/shared/runtime-aliases.manifest.json` **L79–82** (`"bob": ["bob", "bob-cli"]`) | CLI flag/alias routing for `--bob` | **YES** (data only) |
 | 5 | Runtime alias (name-policy) | `gsd-core/bin/lib/runtime-name-policy.cjs` **L46** (`bob: ['bob', 'bob-cli']` in `FALLBACK_ALIASES`) | Name-policy fallback so `--bob` / `bob-cli` normalize to the `bob` runtime | **YES** (data only) |
 | 6 | Converter allowlist entries | `gsd-core/bin/lib/capability-validator.cjs` **L849–850** (`'convertClaudeCommandToBobSkill'`, `'convertClaudeCommandToBobCommand'` in `VALID_CONVERTER_NAMES`, **L844**) | Without these the closed allowlist (enforced at **L1247**) rejects the converters the descriptor names | **YES** (data only) — new in 1.14.0 |
 | 7 | `gsd_run` resolver probes | `gsd-core/references/gsd-run-resolver.md` **L7** — `"${_GSD_RUNTIME_ROOT}/.bob/gsd-core/bin/${_GSD_SHIM_NAME}"` in the project probe and `"$HOME/.bob/gsd-core/bin/${_GSD_SHIM_NAME}"` in the global probe | Makes a `.bob` install reachable from every workflow bash block; the preamble is inlined into ~114 workflow files | **YES** (one line in the canonical preamble) |
-| 8 | Per-install runtime marker | `gsd-core/.gsd-runtime` (contents: `bob`) | gsd-core resolves the active runtime as `GSD_RUNTIME` > `config.runtime` > this marker > `'claude'`. Upstream's `bin/install.js` already writes it for every install; gsd-bob ships it in the payload because its installer copies the tree wholesale. **Not an upstream code change** — listed because a maintainer reviewing a `bob` install must know the marker is how `dispatch-*` queries resolve `bob` | No — existing upstream mechanism |
+| 8 | Per-install runtime marker | `gsd-core/.gsd-runtime` (contents: `bob`) | gsd-core resolves the active runtime as `GSD_RUNTIME` > `config.runtime` > this marker > the reference runtime. Upstream's `bin/install.js` already writes it for every install; gsd-bob ships it in the payload because its installer copies the tree wholesale. **Not an upstream code change** — listed because a maintainer reviewing a `bob` install must know the marker is how `dispatch-*` queries resolve `bob` | No — existing upstream mechanism |
 | 9 | configHome / shim resolution | `gsd-core/bin/lib/runtime-homes.cjs` generic `dot-home` case in `resolveConfigHomeFromDescriptor` **L166–174** (+ the `gsd-tools.cjs` shim, which resolves generically — **no bob-specific branch**, grep-confirmed 0 refs) | Resolves the `bob` home so `gsd_run query` works under Bob | No — generic resolver already handles `dot-home` descriptors |
 
 **Plus the single net-new substance module:**
 
 | Module | File | Role |
 |--------|------|------|
-| Bob adapter | `src/bob-adapter.cjs` | The gate (`gateArtifact` **L448**) + support-roster builder (`buildSupportRoster` **L479**) + model-neutralization pass (`neutralizeModelReferences` **L104** / `scanModelLiterals` **L133**) + idempotent `custom_modes.yaml` merge (`mergeCustomModes` **L298** / `unmergeCustomModes` **L354**) + the scope-asymmetric modes path (`modesRelPathForScope` **L217**). The one isolated Bob-specific component. Fails loud: throws on a non-mapping YAML root, rejects null/nameless candidates, never emits an `undefined:` roster line. |
+| Bob adapter | `src/bob-adapter.cjs` | The gate (`gateArtifact` **L448**) + support-roster builder (`buildSupportRoster` **L479**) + neutralization pass (`neutralizeModelReferences` **L104** / `scanModelLiterals` **L133**, plus the gsd-bob-only `bobifyRuntimeDoc` family — see "Not part of this contribution" above) + idempotent `custom_modes.yaml` merge (`mergeCustomModes` **L298** / `unmergeCustomModes` **L354**) + the scope-asymmetric modes path (`modesRelPathForScope` **L217**). The one isolated Bob-specific component. Fails loud: throws on a non-mapping YAML root, rejects null/nameless candidates, never emits an `undefined:` roster line. |
 
 ### What a maintainer actually lifts
 
@@ -163,7 +185,8 @@ before the `"claude"` entry).
   copy L849–850. Mechanical, but the descriptor is inert without them.
 - **Fold in the converters:** artifacts #2/#3/#3b are the one piece of net-new logic — a
   ~105-line hand-edited block (banner at `runtime-artifact-conversion.cjs` L3578) that mirrors
-  the existing `convertClaudeCommandTo<Runtime>{Skill,Command}` family and reuses its helpers. A
+  the existing per-runtime `convert…CommandTo<Runtime>{Skill,Command}` family and reuses its
+  helpers. A
   maintainer would fold this into the converter family (parameterizing on the registry entry)
   rather than vendor it verbatim. It is **not** stock upstream — it must be added.
 - **Add the two `.bob` probes** to the canonical `gsd_run` resolver preamble (artifact #7) and
@@ -171,7 +194,7 @@ before the `"claude"` entry).
   workflow bash — a pre-existing gap for any runtime whose home is not on the 19-entry list.
 - **No resolver changes:** artifact #9 is the existing generic `dot-home` case; the shim
   resolves the `.bob` home with no new branch. Artifact #8 is an existing install mechanism.
-- **Decide on `bob-adapter.cjs`:** the gate + neutralization pass + `custom_modes.yaml` merge is
+- **Decide on `bob-adapter.cjs`:** the gate + model-neutralization pass + `custom_modes.yaml` merge is
   the other new logic. Upstream can vendor it as-is or fold its gate into the generic install
   path; it is self-contained, node-builtins-only, and dependency-light.
 

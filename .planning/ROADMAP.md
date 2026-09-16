@@ -1,8 +1,8 @@
 # Roadmap: GSD for IBM Bob (gsd-bob)
 
-gsd-bob makes the runtime-neutral GSD planning framework run natively inside IBM Bob, emitting the same `.planning/` artifact contract so Bob and Claude Code stay interchangeable. Backend-neutrality, the capability-map flag-gap contract, and `.planning/` root-anchoring hold across every milestone.
+gsd-bob makes the runtime-neutral GSD planning framework run natively inside IBM Bob, emitting the same `.planning/` artifact contract so Bob and every other GSD runtime stay interchangeable. Backend-neutrality, the capability-map flag-gap contract, and `.planning/` root-anchoring hold across every milestone.
 
-The **test-deferred principle** (no live Bob on the dev device; every criterion verified via doc-conformance, golden/unit tests, or Claude-runtime equivalence, with device-runnable steps accruing to one on-device acceptance checklist) governed v1.0 and v2.0. It was lifted at the start of v3.0, when a live Bob Shell 2.0.1 install was available for Phase 12. **As of 2026-09-16 it is partially back in force:** the dev machine now carries Bob Shell **1.0.4** (the unsupported generation), so Phase 13 was verified hermetically and the live-Bob acceptance run is again deferred to Phase 17 on 2.x hardware.
+The **test-deferred principle** (no live Bob on the dev device; every criterion verified via doc-conformance, golden/unit tests, or reference-runtime equivalence, with device-runnable steps accruing to one on-device acceptance checklist) governed v1.0 and v2.0. It was lifted at the start of v3.0, when a live Bob Shell 2.0.1 install was available for Phase 12. **As of 2026-09-16 it is partially back in force:** the dev machine now carries Bob Shell **1.0.4** (the unsupported generation), so Phase 13 was verified hermetically and the live-Bob acceptance run is again deferred to Phase 17 on 2.x hardware.
 
 ## Milestones
 
@@ -45,7 +45,7 @@ Detail: [`milestones/v2.0-ROADMAP.md`](./milestones/v2.0-ROADMAP.md)
 
 **Goal:** Re-baseline onto both upstreams at once — gsd-core `1.6.1 → 1.14.0` and Bob `1.0.x → 2.0.x` — using the live Bob install to settle what v1/v2 could only defer.
 
-> Re-targeted 2026-09-16: the milestone was scoped as `1.6.1 → 1.10.0`, but upstream shipped 1.11.0–1.14.0 (latest 2026-09-14) before Phase 13 ran, and Bob shipped Shell 2.0.2–2.0.4. Phase 13 re-baselined onto **1.14.0** and onto **Bob 2.0.x only** (a user decision — 1.0.x has no skills and no subagents). Phase 18 is new: it carries NEUTRAL-04, which Phase 13 deliberately did not do.
+> Re-targeted 2026-09-16: the milestone was scoped as `1.6.1 → 1.10.0`, but upstream shipped 1.11.0–1.14.0 (latest 2026-09-14) before Phase 13 ran, and Bob shipped Shell 2.0.2–2.0.4. Phase 13 re-baselined onto **1.14.0** and onto **Bob 2.0.x only** (a user decision — 1.0.x has no skills and no subagents). Phase 18 is new: it carries NEUTRAL-04, which Phase 13's first pass deliberately did not do — and which its second pass, the same day, did.
 
 Sequencing rationale: Bob 2.0 is re-verified **first** (Phase 12) because everything downstream is
 emitted *for* Bob, and v2.0's `command`/`execute` regression came from building on a doc-derived
@@ -61,7 +61,7 @@ Verified upstream deltas: the four 2026-09-16 reports in [`research/`](./researc
 - [ ] **Phase 15: Companion MCP Integration** — MCP-01..03
 - [ ] **Phase 16: External Descriptor Spike & Upstream Inventory** — DESC-01 *(verdict already recorded NO-GO by Phase 13)*
 - [ ] **Phase 17: Documentation & Live-Bob Acceptance** — DOCS-06, ACCEPT-03..05
-- [ ] **Phase 18: Agent/Product-Name Neutralization** — NEUTRAL-04 *(moved out of Phase 13, D-10)*
+- [x] **Phase 18: Agent/Product-Name Neutralization** — NEUTRAL-04 — completed 2026-09-16 *(moved out of Phase 13 by D-10, then executed as Phase 13's second pass)*
 
 #### ✅ Phase 12: Bob 2.0 Capability Re-verification — COMPLETE 2026-08-13
 **Goal:** Replace the 1.0.x doc-derived capability model with one confirmed against a live Bob Shell 2.x install.
@@ -85,11 +85,11 @@ Verified upstream deltas: the four 2026-09-16 reports in [`research/`](./researc
 3. ✅ The zero-model-literal invariant holds across the full emitted `.bob/` set on the new payload
 4. ✅ Three new upstream commands (`next`, `onboard`, `quick-batch`) are gate-decided and vendored — 28 → **31** emitted, 0 unsupported — with every generated doc/roster regenerated from its generator
 5. ✅ `MAINTAINING.md` is rewritten from the real 1.6.1 → 1.14.0 replay, including the anchor that had been deleted upstream, the validator check, the Node-24 grep and the Node 22.15 smoke run
-6. ➡️ **Moved to Phase 18 (D-10):** the emitted set naming no agent or assistant other than Bob (NEUTRAL-04). Fuzzy prose rewriting across 31 commands with a new invariant is out of this compatibility task's scope — recorded, not dropped
+6. ✅ **Deferred to Phase 18 by D-10, then executed the same day as this phase's SECOND PASS** (`13-02-SUMMARY.md`): the emitted set — and the vendored doc tree — name no agent or assistant other than Bob (NEUTRAL-04). The deferral reasoning held (it is not required for 1.14.0 correctness); what changed it is that the fix turned out **not** to be fuzzy prose rewriting across 31 commands but a single stage-time transform over every runtime document
 7. ✅ A drift guard (`test/patch-drift.test.cjs`) holds the vendored descriptor, its `apply-bob-patches.cjs` source block and the loaded `runtimes.bob` in three-way identity, and runs 1.14.0's own `capability-validator` over the entry (0 errors)
 8. ✅ The descriptor gained the fields 1.14.0 requires (`localConfigDir`, `hostIntegration`, `version`, `engines`) and lost the illegal `hookEvents`
 9. ✅ The installer seeds `workflow.use_worktrees: false` alongside `text_mode` and `context_window` (1.14.0's isolation gate exits FATAL on `dispatch.isolation=none` without it) and un-merges all three on uninstall
-10. ✅ The payload ships a per-install `gsd-core/.gsd-runtime` marker (`bob`), so every `dispatch-*` query resolves the `bob` descriptor instead of falling back to `claude`; `.planning/config.json` is deliberately left without a `runtime` key
+10. ✅ The payload ships a per-install `gsd-core/.gsd-runtime` marker (`bob`), so every `dispatch-*` query resolves the `bob` descriptor instead of falling back to the reference runtime; `.planning/config.json` is deliberately left without a `runtime` key
 11. ✅ Global installs emit **absolute** `<target>/gsd-core/...` references, including the mode's shell-out instruction — through v0.2.3 they emitted a workspace-relative `.bob/gsd-core/...` that does not exist under `~/.bob`
 12. ✅ The `gsd_run` resolver preamble probes `<root>/.bob/gsd-core` and `$HOME/.bob/gsd-core` — neither was probed at any point since 1.6.1, so a `.bob` install was unreachable from workflow bash
 
@@ -136,16 +136,20 @@ Verified upstream deltas: the four 2026-09-16 reports in [`research/`](./researc
 
 **Blocked:** the dev machine carries Bob Shell 1.0.4 as of 2026-09-16, not a 2.x install. This phase needs Bob 2.0.x hardware.
 
-#### Phase 18: Agent/Product-Name Neutralization
-**Goal:** Extend v2.0's model-literal invariant to agent and product brand names, and to selection prompts, across the emitted set.
+#### ✅ Phase 18: Agent/Product-Name Neutralization — COMPLETE 2026-09-16
+**Goal:** Extend v2.0's model-literal invariant to agent and product brand names, and to selection prompts, across everything the model reads under Bob.
 **Requirements:** NEUTRAL-04
+**Executed as Phase 13's second pass** (same day) rather than as a separate phase: see
+[`phases/13-gsd-core-1-14-0-re-sync/13-02-SUMMARY.md`](./phases/13-gsd-core-1-14-0-re-sync/13-02-SUMMARY.md).
 **Success criteria:**
-1. The emitted `.bob/` set names **no agent or assistant other than Bob**, and no emitted flow asks the user to choose a model or backend
-2. Enforced by an invariant in the NEUTRAL-03 style (zero brand tokens across the full emitted set, failing with every `file:line:token`), not by spot edits
-3. The surviving 1.14.0 forms are handled deliberately: external-runtime selector flags in `argument-hint` and body prose (`--<runtime>` reviewer/offload flags), one "…selects recommended defaults" self-reference, and one feature described as offloading to another product's cloud
-4. Whatever cannot be neutralized without breaking a command is flagged in `SUPPORT-ROSTER.md` rather than shipped
+1. ✅ The emitted `.bob/` set — `commands/`, `skills/`, `custom_modes.yaml`, `SUPPORT-ROSTER.md` — names **no agent, assistant, vendor or model other than Bob**, and no emitted flow asks the user to choose a model or backend (`resolve_model_ids: "omit"` is the config half: dispatches carry no model parameter)
+2. ✅ Enforced by an invariant in the NEUTRAL-03 style — `test/agent-neutrality.test.cjs`, run over **both** install scopes from real installs, with its forbidden-word table derived from the adapter's own base64 tables so test and transform cannot drift
+3. ✅ **Scope grew beyond the emitted set:** the vendored `gsd-core/{workflows,references,templates,contexts}` doc tree is neutralized too — it is what the model actually reads once a workflow starts. Zero tokens in prose and in every **non-shell** fenced block; no upstream config-home path or instruction filename surviving anywhere; every `gsd_run` resolver preamble replaced by the Bob-only one
+4. ✅ **The residual is bounded, not flagged in the roster:** inside **shell** fences only comment and `echo`/`printf` lines are neutralized. ~130 bare identifiers (`case … in <runtime-id>)` arms, dead env-var probes, `--<runtime>` tokens) deliberately survive, because renaming them could activate another host's branch on Bob or leave a live arm under a misleading name. The count is asserted by test, so a transform that stops running fails loud. Nothing had to be withheld — all 31 commands still emit, and `SUPPORT-ROSTER.md`'s Unsupported set stays empty
+5. ✅ The four adapter-owned config seeds are pinned: `workflow.text_mode: true`, `workflow.use_worktrees: false`, `context_window: 200000` (the **floor** of Bob's documented 200k–270k window, down from the 270000 ceiling), `resolve_model_ids: "omit"`
+6. ✅ gsd-bob's own human-facing docs were neutralized in the same pass, with `UPSTREAM.md`'s inventory tables and `MAINTAINING.md`'s anchor table as the two declared exceptions (they quote upstream source for a gsd-core maintainer and each say so once)
 
-**Why it is its own phase (Phase 13 D-10):** it is fuzzy prose rewriting across 31 commands under a new invariant, it is not required for 1.14.0 correctness, and neutralizing the 1.6.1 content would have been discarded by the re-vendor anyway.
+**Why D-10's deferral was right and what changed:** the deferral reasoning — *not required for 1.14.0 correctness, and 1.6.1-era edits would have been discarded by the re-vendor* — held. What changed is the shape of the fix: it is not fuzzy prose rewriting across 31 commands but **one stage-time transform** (`bobifyRuntimeDoc`) applied to every runtime document at install time, which is why it could be done in a single pass and why a re-vendor cannot discard it.
 
 ## Progress
 
@@ -163,9 +167,9 @@ Verified upstream deltas: the four 2026-09-16 reports in [`research/`](./researc
 | 10. Documentation | v2.0 | 3/3 | Complete | 2026-07-04 |
 | 11. On-Device Acceptance Delta | v2.0 | 1/1 | Complete | 2026-07-04 |
 | 12. Bob 2.0 Capability Re-verification | v3.0 | 1/1 | Complete | 2026-08-13 |
-| 13. gsd-core 1.14.0 Re-sync | v3.0 | 1/1 | Complete | 2026-09-16 |
+| 13. gsd-core 1.14.0 Re-sync | v3.0 | 2/2 | Complete | 2026-09-16 |
 | 14. Native Bob 2.0 Surfaces | v3.0 | 0/– | Not started (blocked: personas undocumented) | — |
 | 15. Companion MCP Integration | v3.0 | 0/– | Not started | — |
 | 16. External Descriptor Spike & Upstream Inventory | v3.0 | 0/– | Not started | — |
 | 17. Documentation & Live-Bob Acceptance | v3.0 | 0/– | Not started (blocked: no Bob 2.x on device) | — |
-| 18. Agent/Product-Name Neutralization | v3.0 | 0/– | Not started (NEUTRAL-04, moved from 13) | — |
+| 18. Agent/Product-Name Neutralization | v3.0 | 1/1 | Complete (executed as Phase 13's second pass) | 2026-09-16 |
